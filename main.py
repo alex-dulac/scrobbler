@@ -51,6 +51,11 @@ def scrobble_to_lastfm(track, artist, album):
 def main():
     last_song = None
     while True:
+        print("Apple Music playing: ", get_current_song())
+
+        user_lastfm = network.get_user(USERNAME)
+        print("Most recent scrobble: ", user_lastfm.get_recent_tracks()[0].track)
+
         track, artist, album = get_current_song()
         if track and artist and (track, artist) != last_song:
             scrobble_to_lastfm(track, artist, album)
