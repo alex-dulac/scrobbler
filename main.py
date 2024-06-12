@@ -1,5 +1,7 @@
 import os
 import time
+from datetime import datetime
+
 import pylast
 
 API_KEY = ''
@@ -16,7 +18,7 @@ network = pylast.LastFMNetwork(
 )
 
 
-def get_current_song():
+def poll_apple_music():
     """Use osascript to get the currently playing song from Apple Music."""
     script = """
     tell application "Music"
@@ -33,34 +35,63 @@ def get_current_song():
     """
     result = os.popen("osascript -e '{}'".format(script)).read().strip()
     if result:
-        track, artist, album = result.split(' - ')
-        return track, artist, album
-    return None, None, None
+        song = result.split(" - ")
+        current_song["track"] = song[0]
+        current_song["artist"] = song[1]
+        current_song["album"] = song[2]
+    else:
+        current_song["track"] = None
+        current_song["artist"] = None
+        current_song["album"] = None
 
 
-def scrobble_to_lastfm(track, artist, album):
-    """Scrobble the song to Last.fm."""
+def scrobble_to_lastfm():
+    """Scrobble the current song to Last.fm."""
+    artist = current_song["artist"]
+    track = current_song["track"]
+    album = current_song["album"]
     timestamp = int(time.time())
-    try:
-        network.scrobble(artist=artist, title=track, timestamp=timestamp, album=album)
-        print(f"Scrobbled: {track} - {artist} - {album}")
-    except pylast.WSError as e:
-        print(f"Error: {e}")
+
+    if artist and track and album:
+        try:
+            network.scrobble(artist=artist, title=track, timestamp=timestamp, album=album)
+            # print(f"Scrobbled: {track} - {artist} - {album}")
+        except pylast.WSError as e:
+            print(f"Error: {e}")
 
 
 def main():
     last_song = None
     while True:
-        print("Apple Music playing: ", get_current_song())
+        poll_apple_music()
+
+        currently_playing = current_song["track"]
+        if currently_playing:
+            print("Apple Music playing: ", currently_playing)
+        else:
+            print("Apple Music not playing")
 
         user_lastfm = network.get_user(USERNAME)
-        print("Most recent scrobble: ", user_lastfm.get_recent_tracks()[0].track)
+        print("LastFM user: ", user_lastfm.name)
+        user_recent_tracks = user_lastfm.get_recent_tracks()
+        most_recent_scrobble = user_recent_tracks[0]
 
-        track, artist, album = get_current_song()
-        if track and artist and (track, artist) != last_song:
-            scrobble_to_lastfm(track, artist, album)
-            last_song = (track, artist)
+        timestamp = int(most_recent_scrobble.timestamp)
+        scrobbled_at = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+        if most_recent_scrobble:
+            print("Most recent scrobble: ", most_recent_scrobble.track.title, " by ",
+                  most_recent_scrobble.track.artist, " from ", most_recent_scrobble.album)
+            print("Scrobbled at ", scrobbled_at)
+        else:
+            print("No scrobbles yet")
+
+        if (current_song["track"], current_song["artist"]) != last_song:
+            scrobble_to_lastfm()
+            last_song = (current_song["track"], current_song["artist"])
+
         time.sleep(30)  # Check every 30 seconds
+        print("------------------")
 
 
 if __name__ == "__main__":
