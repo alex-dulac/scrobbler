@@ -1,10 +1,19 @@
 from fastapi import FastAPI
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
 import settings
 from script import poll_apple_music, print_most_recent_scrobble, scrobble_to_lastfm
+from service import get_user
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -15,6 +24,12 @@ def root():
 @app.get("/username")
 def username():
     return {"username": settings.USERNAME}
+
+
+@app.get("/user")
+def username():
+    user = get_user()
+    return {"user": user}
 
 
 @app.get("/current-song")

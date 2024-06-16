@@ -34,16 +34,19 @@ def poll_apple_music() -> AppleMusicTrack | None:
         end if
     end tell
     """
-    result = applescript.AppleScript(script).run()
-    if result:
-        track_info = result
-        return AppleMusicTrack(
-            track=track_info[0],
-            artist=track_info[1],
-            album=track_info[2]
-        )
-    else:
-        return None
+    try:
+        result = applescript.AppleScript(script).run()
+        if result:
+            track_info = result
+            return AppleMusicTrack(
+                track=track_info[0],
+                artist=track_info[1],
+                album=track_info[2]
+            )
+        else:
+            return None
+    except applescript.ScriptError as e:
+        print(f"Applescript Error: {e}")
 
 
 def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
@@ -59,6 +62,10 @@ def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
         except pylast.WSError as e:
             print(f"Error: {e}")
             return False
+
+
+def get_user() -> pylast.User:
+    return network.get_user(settings.USERNAME)
 
 
 def print_current_song(current_song: AppleMusicTrack) -> None:
