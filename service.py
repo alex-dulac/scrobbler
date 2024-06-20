@@ -5,7 +5,7 @@ import applescript
 import pylast
 
 import settings
-from model import AppleMusicTrack
+from model import AppleMusicTrack, LastFmTrack
 
 API_KEY = settings.API_KEY
 API_SECRET = settings.API_SECRET
@@ -46,7 +46,8 @@ def poll_apple_music() -> AppleMusicTrack | None:
         else:
             return None
     except applescript.ScriptError as e:
-        print(f"Applescript Error: {e}")
+        print("Applescript Error:")
+        print(f"{e}")
 
 
 def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
@@ -60,7 +61,8 @@ def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
             network.scrobble(artist=artist, title=track, timestamp=timestamp, album=album)
             return True
         except pylast.WSError as e:
-            print(f"Error: {e}")
+            print("pylast Error:")
+            print(f"{e}")
             return False
 
 
@@ -75,19 +77,24 @@ def print_current_song(current_song: AppleMusicTrack) -> None:
         print("Apple Music not playing")
 
 
-def print_most_recent_scrobble() -> None:
-    user_lastfm = network.get_user(settings.USERNAME)
-    print("LastFM user: ", user_lastfm.name)
+def get_most_recent_scrobble() -> LastFmTrack | None:
+    user_lastfm = get_user()
     user_recent_tracks = user_lastfm.get_recent_tracks()
     most_recent_scrobble = user_recent_tracks[0]
-
     timestamp = int(most_recent_scrobble.timestamp)
     scrobbled_at = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    return LastFmTrack(
+        track=most_recent_scrobble.track,
+        artist=most_recent_scrobble.track.artist,
+        album=most_recent_scrobble.album,
+        scrobbled_at=scrobbled_at
+    )
 
-    if most_recent_scrobble:
-        print("Most recent scrobble: '", most_recent_scrobble.track.title, "' by ",
-              most_recent_scrobble.track.artist, " from '", most_recent_scrobble.album, "'")
-        print("Scrobbled at ", scrobbled_at)
-    else:
-        print("No scrobbles yet")
+
+def print_most_recent_scrobble() -> None:
+    most_recent_scrobble = get_most_recent_scrobble()
+    print("Most recent scrobble: '", most_recent_scrobble.track.title,
+          "' by ", most_recent_scrobble.artist,
+          " from '", most_recent_scrobble.album,
+          "' at ", most_recent_scrobble.scrobbled_at)
 
