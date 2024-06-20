@@ -59,6 +59,7 @@ def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
     if artist and track and album:
         try:
             network.scrobble(artist=artist, title=track, timestamp=timestamp, album=album)
+            print("Scrobbled current song to Last.fm")
             return True
         except pylast.WSError as e:
             print("pylast Error:")
@@ -70,7 +71,7 @@ def get_user() -> pylast.User:
     return network.get_user(settings.USERNAME)
 
 
-def print_current_song(current_song: AppleMusicTrack) -> None:
+def print_polled_apple_music_song(current_song: AppleMusicTrack | None) -> None:
     if current_song:
         print("Apple Music playing: ", current_song.track)
     else:

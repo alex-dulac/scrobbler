@@ -1,6 +1,8 @@
 import time
+
+from model import AppleMusicTrack
 from service import (
-    print_current_song,
+    print_polled_apple_music_song,
     poll_apple_music,
     print_most_recent_scrobble,
     scrobble_to_lastfm
@@ -9,38 +11,75 @@ from service import (
 
 def main():
     """
-    Main function to continuously poll Apple Music for the current song,
-    print the most recent scrobble, and scrobble the current song to Last.fm if it hasn't been scrobbled yet.
+    Main function to poll Apple Music for the currently playing song and scrobble it to Last.fm if it hasn't been scrobbled yet.
 
-    This function runs an infinite loop that performs the following steps every 30 seconds:
-    1. Prints the most recent scrobble from Last.fm.
-    2. Polls Apple Music to get the current song being played.
-    3. Prints the current song information.
-    4. Checks if the current song has been scrobbled to Last.fm. If not, it scrobbles the song and prints the most recent scrobble again.
-    5. Prints a separator line for readability.
-    6. Sleeps for 30 seconds before repeating the process.
+    This function runs an infinite loop that:
+    - Polls the currently playing song from Apple Music.
+    - Prints the most recent scrobble from Last.fm.
+    - Checks if the currently playing song has changed.
+    - Scrobbles the new song to Last.fm if it hasn't been scrobbled yet.
+    - Waits for 30 seconds before polling again.
 
-    Note:
-        This function runs indefinitely until manually stopped.
+    The loop can be interrupted with a KeyboardInterrupt (Ctrl+C), which will gracefully exit the loop.
+
+    Variables:
+    - current_song: Stores the currently playing song.
+    - previous_song: Stores the previously scrobbled song.
+    - loop_count: Counts the number of iterations of the loop.
+    - scrobble_count: Counts the number of songs scrobbled to Last.fm.
     """
-    while True:
-        print_most_recent_scrobble()
+    current_song: AppleMusicTrack | None = None
+    previous_song: AppleMusicTrack | None = None
 
-        poll = poll_apple_music()
-        if poll
-        print_current_song(current_song)
+    loop_count = 0
+    scrobble_count = 0
 
-        if current_song and current_song.scrobbled is False:
-            scrobble_to_lastfm(current_song)
-            current_song.scrobbled = True
+    bar = "==============================="
+
+    try:
+        while True:
+            loop_count += 1
+            print(f"Loop #{loop_count}")
+            print(f"Scrobbles: {scrobble_count}")
+
             print_most_recent_scrobble()
 
-        print("------------------")
-        time.sleep(30)  # Check every 30 seconds
+            poll = poll_apple_music()
+            print_polled_apple_music_song(poll)
 
+            if poll and (current_song is None or
+                         (current_song.track != poll.track or current_song.artist != poll.artist)):
+                current_song = poll
 
-if __name__ == "__main__":
-    main()
+            if current_song and current_song.scrobbled:
+                print("Current song has already been scrobbled.")
+
+            if (current_song is not None and
+                    not current_song.scrobbled and
+                    (not previous_song or (previous_song and current_song.track != previous_song.track))):
+                scrobble_to_lastfm(current_song)
+                current_song.scrobbled = True
+                previous_song = current_song
+                scrobble_count += 1
+
+            print(bar)
+            print("\n")
+
+            wait = '.'
+            for i in range(30):
+                print(f" Waiting{wait}", end="\r")
+                wait += "."
+                time.sleep(1)
+
+            print("\n\n")
+            print(bar)
+
+    except KeyboardInterrupt:
+        print("\n\n")
+        print(bar)
+        print("Exiting...")
+        print(bar)
+        print("\n\n")
 
 
 if __name__ == "__main__":
