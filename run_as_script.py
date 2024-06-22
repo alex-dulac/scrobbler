@@ -5,7 +5,7 @@ from service import (
     print_polled_apple_music_song,
     poll_apple_music,
     print_most_recent_scrobble,
-    scrobble_to_lastfm
+    scrobble_to_lastfm,
 )
 
 
@@ -47,16 +47,14 @@ def main():
             poll = poll_apple_music()
             print_polled_apple_music_song(poll)
 
-            if poll and (current_song is None or
-                         (current_song.track != poll.track or current_song.artist != poll.artist)):
+            if poll and (current_song is None or (current_song.track_id != poll.track_id)):
                 current_song = poll
 
             if current_song and current_song.scrobbled:
                 print("Current song has already been scrobbled.")
 
-            if (current_song is not None and
-                    not current_song.scrobbled and
-                    (not previous_song or (previous_song and current_song.track != previous_song.track))):
+            if (current_song is not None and not current_song.scrobbled and
+                    (not previous_song or (previous_song and current_song.track_id != previous_song.track_id))):
                 scrobble_to_lastfm(current_song)
                 current_song.scrobbled = True
                 previous_song = current_song
