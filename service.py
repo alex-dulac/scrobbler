@@ -27,13 +27,8 @@ def poll_apple_music() -> AppleMusicTrack | None:
         if it is running then
             if player state is playing then
                 set currentTrack to the current track
-                set trackName to the name of currentTrack
-                set artistName to the artist of currentTrack
-                set albumName to the album of currentTrack
-                set trackDuration to the duration of currentTrack
-                set trackID to the id of currentTrack
-                set trackPersistentID to the persistent ID of currentTrack
-                return {trackName, artistName, albumName, trackDuration, trackID, trackPersistentID}
+                set trackInfo to (get properties of currentTrack)
+                return trackInfo
             end if
         end if
     end tell
@@ -41,24 +36,7 @@ def poll_apple_music() -> AppleMusicTrack | None:
     try:
         result = applescript.AppleScript(script).run()
         if result:
-            track_name = result[0]
-            artist_name = result[1]
-            album_name = result[2]
-            track_duration = result[3]
-            track_id = result[4]
-            track_persistent_id = result[5]
-
-            base_url = "https://music.apple.com/us/album"
-            track_url = f"{base_url}/{album_name.replace(' ', '-').lower()}/{track_persistent_id}?i={track_persistent_id}"
-            return AppleMusicTrack(
-                track_name,
-                artist_name,
-                album_name,
-                track_duration,
-                track_id,
-                track_persistent_id,
-                track_url
-            )
+            return AppleMusicTrack(result)
         else:
             return None
     except applescript.ScriptError as e:
@@ -68,7 +46,7 @@ def poll_apple_music() -> AppleMusicTrack | None:
 
 def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
     artist = current_song.artist
-    track = current_song.track
+    track = current_song.name
     album = current_song.album
     timestamp = int(time.time())
 
@@ -89,8 +67,7 @@ def get_user() -> pylast.User:
 
 def print_polled_apple_music_song(current_song: AppleMusicTrack | None) -> None:
     if current_song:
-        print(current_song.share_link)
-        print("Apple Music playing: ", current_song.track)
+        print("Apple Music playing: ", current_song.name)
     else:
         print("Apple Music not playing")
 
@@ -102,7 +79,7 @@ def get_most_recent_scrobble() -> LastFmTrack | None:
     timestamp = int(most_recent_scrobble.timestamp)
     scrobbled_at = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
     return LastFmTrack(
-        track=most_recent_scrobble.track,
+        name=most_recent_scrobble.track,
         artist=most_recent_scrobble.track.artist,
         album=most_recent_scrobble.album,
         scrobbled_at=scrobbled_at
@@ -111,7 +88,7 @@ def get_most_recent_scrobble() -> LastFmTrack | None:
 
 def print_most_recent_scrobble() -> None:
     most_recent_scrobble = get_most_recent_scrobble()
-    print("Most recent scrobble: '", most_recent_scrobble.track.title,
+    print("Most recent scrobble: '", most_recent_scrobble.name,
           "' by ", most_recent_scrobble.artist,
           " from '", most_recent_scrobble.album,
           "' at ", most_recent_scrobble.scrobbled_at)

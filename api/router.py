@@ -31,8 +31,7 @@ async def user():
 async def get_current_song(app_state: AppState = Depends(get_app_state)):
     result = poll_apple_music()
 
-    if result and (
-            app_state.current_song is None or result.track != app_state.current_song.track or result.artist != app_state.current_song.artist):
+    if result and (app_state.current_song is None or result.id != app_state.current_song.id):
         app_state.current_song = result
 
     return {"current_song": app_state.current_song}
