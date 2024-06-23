@@ -8,6 +8,16 @@ from service import (
     scrobble_to_lastfm
 )
 
+bar = "=================================================="
+
+
+def stop() -> None:
+    print("\n\n")
+    print(bar)
+    print("Exiting...")
+    print(bar)
+    print("\n\n")
+
 
 def main():
     """
@@ -34,8 +44,6 @@ def main():
     loop_count = 0
     scrobble_count = 0
 
-    bar = "==============================="
-
     try:
         while True:
             loop_count += 1
@@ -50,15 +58,16 @@ def main():
             if poll and (current_song is None or (current_song.id != poll.id)):
                 current_song = poll
 
-            if current_song and current_song.scrobbled:
-                print("Current song has already been scrobbled.")
-
-            if (current_song is not None and not current_song.scrobbled and
-                    (not previous_song or (previous_song and current_song.id != previous_song.id))):
+            scrobble = current_song and not current_song.scrobbled and (not previous_song or (previous_song and current_song.id != previous_song.id))
+            if scrobble:
                 scrobble_to_lastfm(current_song)
                 current_song.scrobbled = True
                 previous_song = current_song
                 scrobble_count += 1
+            elif current_song and current_song.scrobbled:
+                print("Current song has already been scrobbled.")
+            else:
+                print("No current song to scrobble.")
 
             print(bar)
             print("\n")
@@ -73,11 +82,7 @@ def main():
             print(bar)
 
     except KeyboardInterrupt:
-        print("\n\n")
-        print(bar)
-        print("Exiting...")
-        print(bar)
-        print("\n\n")
+        stop()
 
 
 if __name__ == "__main__":

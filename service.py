@@ -7,15 +7,15 @@ import pylast
 import settings
 from model import AppleMusicTrack, LastFmTrack
 
-API_KEY = settings.API_KEY
-API_SECRET = settings.API_SECRET
+LASTFM_API_KEY = settings.LASTFM_API_KEY
+LASTFM_API_SECRET = settings.LASTFM_API_SECRET
 USERNAME = settings.USERNAME
 PASSWORD_HASH = pylast.md5(settings.PASSWORD)
 
 # Create a Last.fm network object
 network = pylast.LastFMNetwork(
-    api_key=API_KEY,
-    api_secret=API_SECRET,
+    api_key=LASTFM_API_KEY,
+    api_secret=LASTFM_API_SECRET,
     username=USERNAME,
     password_hash=PASSWORD_HASH
 )

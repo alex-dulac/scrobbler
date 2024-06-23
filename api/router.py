@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends
 
 import settings
-from api.state import AppState, get_app_state
+from api.state import get_app_state
+from security import verify_token
 from service import (
     get_user,
     get_most_recent_scrobble,
@@ -9,7 +10,7 @@ from service import (
     scrobble_to_lastfm
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_app_state), Depends(verify_token)])
 
 
 @router.get("/")
@@ -28,7 +29,8 @@ async def user():
 
 
 @router.get("/poll-song")
-async def get_current_song(app_state: AppState = Depends(get_app_state)):
+async def get_current_song():
+    app_state = get_app_state()
     result = poll_apple_music()
 
     if result and (app_state.current_song is None or result.id != app_state.current_song.id):
@@ -38,7 +40,8 @@ async def get_current_song(app_state: AppState = Depends(get_app_state)):
 
 
 @router.get("/current-song")
-async def get_current_song(app_state: AppState = Depends(get_app_state)):
+async def get_current_song():
+    app_state = get_app_state()
     return {"current_song": app_state.current_song}
 
 
@@ -49,20 +52,23 @@ async def get_recent_scrobble():
 
 
 @router.get("/scrobble-status")
-async def scrobble_status(app_state: AppState = Depends(get_app_state)):
-    result = app_state.is_scrobbling
-    return {"is_scrobbling": result}
+async def scrobble_status():
+    app_state = get_app_state()
+    return {"is_scrobbling": app_state.is_scrobbling}
 
 
-@router.get("/scrobble-toggle")
-async def scrobble_toggle(app_state: AppState = Depends(get_app_state)):
+@router.post("/scrobble-toggle")
+async def scrobble_toggle():
+    app_state = get_app_state()
     is_scrobbling = app_state.is_scrobbling
     app_state.is_scrobbling = not is_scrobbling
     return {"is_scrobbling": app_state.is_scrobbling}
 
 
 @router.post("/scrobble-song")
-async def scrobble_song(app_state: AppState = Depends(get_app_state)):
+async def scrobble_song():
+    app_state = get_app_state()
+
     if not app_state.is_scrobbling:
         return {"result": "Scrobbling is not enabled. Please turn on scrobbling and try again."}
 
@@ -78,7 +84,8 @@ async def scrobble_song(app_state: AppState = Depends(get_app_state)):
 
 
 @router.get("/sync")
-async def sync(app_state: AppState = Depends(get_app_state)):
+async def sync():
+    app_state = get_app_state()
     return {
         "current_song": app_state.current_song,
         "is_scrobbling": app_state.is_scrobbling,
