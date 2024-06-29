@@ -1,3 +1,25 @@
+class LastFmUser:
+    def __init__(
+            self,
+            name: str,
+            playcount: int,
+            now_playing: str,
+            loved_tracks: list,
+            recent_tracks: list,
+            image_url: str,
+            top_artists: list,
+            url: str
+    ):
+        self.name = name
+        self.playcount = playcount
+        self.now_playing = now_playing
+        self.loved_tracks = loved_tracks
+        self.recent_tracks = recent_tracks
+        self.image_url = image_url
+        self.top_artists = top_artists
+        self.url = url
+
+
 class LastFmTrack:
     def __init__(
             self,
@@ -13,7 +35,12 @@ class LastFmTrack:
 
 
 class AppleMusicTrack:
-    def __init__(self, track_info, scrobbled: bool = False):
+    def __init__(
+            self,
+            track_info,
+            playing: bool = False,
+            scrobbled: bool = False
+    ):
         self.id = None
         self.index = None
         self.name = None
@@ -68,6 +95,7 @@ class AppleMusicTrack:
         self.movement_number = None
         self.movement_count = None
         self.cls = None
+        self.playing = playing
         self.scrobbled = scrobbled
 
         ae_type_map = {

@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
 
-import settings
 from api.state import get_app_state
 from security import verify_token
 from service import (
-    get_user,
     get_most_recent_scrobble,
     poll_apple_music,
-    scrobble_to_lastfm
+    scrobble_to_lastfm,
+    get_user_details,
+    update_lastfm_now_playing
 )
 
 router = APIRouter(dependencies=[Depends(get_app_state), Depends(verify_token)])
@@ -18,14 +18,9 @@ async def root():
     return {"status": "ok"}
 
 
-@router.get("/username")
-async def username():
-    return {"username": settings.USERNAME}
-
-
 @router.get("/user")
 async def user():
-    return {"user": get_user()}
+    return {"user": get_user_details()}
 
 
 @router.get("/poll-song")
@@ -36,12 +31,9 @@ async def get_current_song():
     if result and (app_state.current_song is None or result.id != app_state.current_song.id):
         app_state.current_song = result
 
-    return {"current_song": app_state.current_song}
+    if app_state.current_song:
+        update_lastfm_now_playing(app_state.current_song)
 
-
-@router.get("/current-song")
-async def get_current_song():
-    app_state = get_app_state()
     return {"current_song": app_state.current_song}
 
 
@@ -78,6 +70,9 @@ async def scrobble_song():
     if app_state.current_song.scrobbled:
         return {"result": "This song has already been scrobbled."}
 
+    if not app_state.current_song.playing:
+        return {"result": "Current song is not playing."}
+
     result = scrobble_to_lastfm(app_state.current_song)
     app_state.current_song.scrobbled = result
     return {"result": result}
@@ -89,5 +84,5 @@ async def sync():
     return {
         "current_song": app_state.current_song,
         "is_scrobbling": app_state.is_scrobbling,
-        "user": get_user()
+        "user": get_user_details()
     }
