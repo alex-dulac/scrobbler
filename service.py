@@ -4,15 +4,14 @@ from datetime import datetime
 import applescript
 import pylast
 
-import settings
-from model import AppleMusicTrack, LastFmTrack, LastFmUser
+from config import settings
+from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmUserStats
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
 USERNAME = settings.USERNAME
 PASSWORD_HASH = pylast.md5(settings.PASSWORD)
 
-# Create a Last.fm network object
 network = pylast.LastFMNetwork(
     api_key=LASTFM_API_KEY,
     api_secret=LASTFM_API_SECRET,
@@ -38,24 +37,31 @@ def poll_apple_music() -> AppleMusicTrack | None:
         track = result[0]
         playing = result[1]
 
-        if track != "AEType(b'msng')":
+        if track != applescript.AEType(applescript.kae.cMissingValue):
             return AppleMusicTrack(track_info=track, playing=playing)
         else:
             return None
     except applescript.ScriptError as e:
-        print("Applescript Error:")
-        print(f"{e}")
+        if e.number == -1728:
+            print("Apple Music is open but no song is selected.")
+            return None
+        else:
+            print("Applescript Error:")
+            print(f"{e}")
+            return None
 
 
 def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
-    if current_song.playing:
+    try:
         network.update_now_playing(
             artist=current_song.artist,
             title=current_song.name,
             album=current_song.album
         )
-    else:
-        print("Not playing")
+        print("Updated Last.fm now playing")
+    except pylast.WSError as e:
+        print("pylast Error:")
+        print(f"{e}")
 
 
 def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
@@ -79,26 +85,39 @@ def get_user() -> pylast.User:
     return network.get_user(settings.USERNAME)
 
 
-def get_user_details() -> LastFmUser:
+def get_user_minimal() -> LastFmUser:
     user = get_user()
     return LastFmUser(
-        name=user.name,
-        playcount=user.get_playcount(),
-        now_playing=user.get_now_playing(),
-        loved_tracks=user.get_loved_tracks(),
-        recent_tracks=user.get_recent_tracks(),
+        name=user.get_name(),
         image_url=user.get_image(),
-        top_artists=user.get_top_artists(),
-        url=user.get_url(),
+        url=user.get_url()
     )
 
 
-def print_polled_apple_music_song(current_song: AppleMusicTrack | None) -> None:
-    if current_song:
-        print("Apple Music current song: ", current_song.name, " by ", current_song.artist)
-        print("Song is paused") if not current_song.playing else None
-    else:
-        print("Apple Music not playing")
+def get_user_details() -> LastFmUserStats:
+    user = get_user()
+
+    playcount = user.get_playcount()
+    playcount = format(playcount, ',')
+
+    recent_tracks = user.get_recent_tracks(limit=20)
+    tracks = []
+    for track in recent_tracks:
+        scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
+        tracks.append(LastFmTrack(
+            name=track.track.title,
+            artist=track.track.artist.name,
+            album=track.album,
+            scrobbled_at=scrobbled_at.strftime('%Y-%m-%d %H:%M:%S')
+        ))
+
+    # loved_tracks = user.get_loved_tracks()
+    # top_artists = user.get_top_artists()
+
+    return LastFmUserStats(
+        playcount=playcount,
+        recent_tracks=tracks,
+    )
 
 
 def get_most_recent_scrobble() -> LastFmTrack | None:
@@ -113,6 +132,19 @@ def get_most_recent_scrobble() -> LastFmTrack | None:
         album=most_recent_scrobble.album,
         scrobbled_at=scrobbled_at
     )
+
+
+"""
+PRINT COMMANDS FOR THE LOOP SCRIPT
+"""
+
+
+def print_polled_apple_music_song(current_song: AppleMusicTrack | None) -> None:
+    if current_song:
+        print("Apple Music current song: ", current_song.name, " by ", current_song.artist)
+        print("Song is paused") if not current_song.playing else None
+    else:
+        print("Apple Music not playing")
 
 
 def print_most_recent_scrobble() -> None:
