@@ -29,13 +29,15 @@ class LastFmTrack:
             self,
             name: str,
             artist: str,
-            album: str,
+            album: str = None,
             scrobbled_at: str = None,
+            loved_at: str = None
     ):
         self.name = name
         self.artist = artist
         self.album = album
         self.scrobbled_at = scrobbled_at
+        self.loved_at = loved_at
 
 
 class LastFmAlbum:
@@ -54,6 +56,30 @@ class LastFmAlbum:
         self.image_url = image_url
         self.url = url
         self.tracks = tracks
+
+
+class LastFmArtist:
+    def __init__(
+            self,
+            name: str,
+            playcount: int = None,
+            url: str = None,
+    ):
+        self.name = name,
+        self.playcount = playcount,
+        self.url = url
+
+
+class LastFmTopItem:
+    def __init__(
+            self,
+            name: str,
+            weight: int = None,
+            details: LastFmTrack | LastFmAlbum | LastFmArtist = None
+    ):
+        self.name = name,
+        self.weight = weight,
+        self.details = details
 
 
 class AppleMusicTrack:

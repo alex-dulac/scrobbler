@@ -1,10 +1,11 @@
 import time
 from datetime import datetime
+from typing import List
 
 import pylast
 
 from config import settings
-from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmAlbum
+from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmAlbum, LastFmTopItem, LastFmArtist
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
@@ -51,17 +52,58 @@ def get_user_recent_tracks() -> list[LastFmTrack]:
     tracks = []
     for track in recent_tracks:
         scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
-        tracks.append(LastFmTrack(
-            name=track.track.title,
-            artist=track.track.artist.name,
-            album=track.album,
-            scrobbled_at=scrobbled_at.strftime('%Y-%m-%d %H:%M:%S')
-        ))
-
-    # loved_tracks = user.get_loved_tracks()
-    # top_artists = user.get_top_artists()
+        tracks.append(
+            LastFmTrack(
+                name=track.track.title,
+                artist=track.track.artist.name,
+                album=track.album,
+                scrobbled_at=scrobbled_at.strftime('%Y-%m-%d %H:%M:%S')
+            )
+        )
 
     return tracks
+
+
+def get_user_loved_tracks() -> list[LastFmTrack]:
+    user = get_user()
+
+    loved_tracks = user.get_loved_tracks()
+    tracks = []
+    for track in loved_tracks:
+        loved_at = datetime.fromtimestamp(int(track.timestamp))
+        tracks.append(
+            LastFmTrack(
+                name=track.track.title,
+                artist=track.track.artist.name,
+                loved_at=loved_at.strftime('%Y-%m-%d %H:%M:%S')
+            )
+        )
+
+    return tracks
+
+
+def get_user_top_artists() -> list:
+    user = get_user()
+
+    top_artists = user.get_top_artists(limit=2)
+    artists = []
+    for artist in top_artists:
+        details: pylast.Artist = artist.item
+        model = LastFmArtist(
+            name=details.name,
+            playcount=details.get_playcount(),
+            url=details.get_url()
+        )
+
+        artists.append(
+            LastFmTopItem(
+                name=artist.item.name,
+                weight=artist.weight,
+                details=model
+            )
+        )
+
+    return artists
 
 
 def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
