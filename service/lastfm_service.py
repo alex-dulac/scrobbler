@@ -1,6 +1,5 @@
 import time
 from datetime import datetime
-from typing import List
 
 import pylast
 
@@ -82,10 +81,10 @@ def get_user_loved_tracks() -> list[LastFmTrack]:
     return tracks
 
 
-def get_user_top_artists() -> list:
+def get_user_top_artists() -> list[LastFmTopItem]:
     user = get_user()
 
-    top_artists = user.get_top_artists(limit=2)
+    top_artists = user.get_top_artists(limit=10)
     artists = []
     for artist in top_artists:
         details: pylast.Artist = artist.item
@@ -104,6 +103,31 @@ def get_user_top_artists() -> list:
         )
 
     return artists
+
+
+def get_user_top_albums() -> list[LastFmTopItem]:
+    user = get_user()
+
+    top_albums = user.get_top_albums(limit=10)
+    albums = []
+    for album in top_albums:
+        details: pylast.Album = album.item
+        model = LastFmAlbum(
+            title=details.title,
+            artist=details.artist.name,
+            image_url=details.get_cover_image(size=pylast.SIZE_LARGE),
+            url=details.get_url()
+        )
+
+        albums.append(
+            LastFmTopItem(
+                name=album.item.title,
+                weight=album.weight,
+                details=model
+            )
+        )
+
+    return albums
 
 
 def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
