@@ -5,7 +5,7 @@ import applescript
 import pylast
 
 from config import settings
-from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmUserStats
+from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmUserStats, LastFmAlbum
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
@@ -132,6 +132,19 @@ def get_most_recent_scrobble() -> LastFmTrack | None:
         album=most_recent_scrobble.album,
         scrobbled_at=scrobbled_at
     )
+
+
+def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
+    album = network.get_album(title=title, artist=artist)
+    if album:
+        return LastFmAlbum(
+            title=album.title,
+            artist=album.artist.name,
+            image_url=album.get_cover_image(),
+            url=album.get_url()
+        )
+    else:
+        return None
 
 
 """

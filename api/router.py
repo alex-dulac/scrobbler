@@ -8,10 +8,14 @@ from service import (
     scrobble_to_lastfm,
     get_user_details,
     update_lastfm_now_playing,
-    get_user_minimal
+    get_user_minimal,
+    get_lastfm_album
 )
 
-router = APIRouter(dependencies=[Depends(get_app_state), Depends(verify_token)])
+router = APIRouter(dependencies=[
+    Depends(get_app_state),
+    Depends(verify_token)
+])
 
 
 @router.get("/user")
@@ -36,7 +40,10 @@ async def get_current_song():
     if update_now_playing:
         update_lastfm_now_playing(app_state.current_song)
 
-    return {"current_song": app_state.current_song}
+    if app_state.lastfm_album is None or app_state.current_song.album != app_state.lastfm_album.title:
+        app_state.lastfm_album = get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
+
+    return {"current_song": app_state.current_song, "lastfm_album": app_state.lastfm_album}
 
 
 @router.get("/recent-scrobble")
@@ -85,6 +92,7 @@ async def sync():
     app_state = get_app_state()
     return {
         "current_song": app_state.current_song,
+        "lastfm_album": app_state.lastfm_album,
         "is_scrobbling": app_state.is_scrobbling,
         "user": get_user_minimal()
     }

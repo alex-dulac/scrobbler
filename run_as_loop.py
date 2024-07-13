@@ -57,6 +57,8 @@ def main():
 
             if poll and (current_song is None or (current_song.id != poll.id)):
                 current_song = poll
+            elif current_song and not poll:
+                current_song = None
 
             scrobble = (current_song
                         and not current_song.scrobbled

@@ -40,6 +40,24 @@ class LastFmTrack:
         self.scrobbled_at = scrobbled_at
 
 
+class LastFmAlbum:
+    def __init__(
+            self,
+            title: str,
+            artist: str,
+            release_date: str = None,
+            image_url: str = None,
+            url: str = None,
+            tracks: list = None
+    ):
+        self.title = title
+        self.artist = artist
+        self.release_date = release_date
+        self.image_url = image_url
+        self.url = url
+        self.tracks = tracks
+
+
 class AppleMusicTrack:
     def __init__(
             self,
