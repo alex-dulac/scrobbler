@@ -17,13 +17,11 @@ class LastFmUser:
             self,
             name: str,
             image_url: str,
-            url: str,
-            stats: LastFmUserStats = None
+            url: str
     ):
         self.name = name
         self.image_url = image_url
         self.url = url
-        self.stats = stats
 
 
 class LastFmTrack:

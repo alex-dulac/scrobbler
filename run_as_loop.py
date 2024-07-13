@@ -1,12 +1,8 @@
 import time
 
 from model import AppleMusicTrack
-from service import (
-    print_polled_apple_music_song,
-    poll_apple_music,
-    print_most_recent_scrobble,
-    scrobble_to_lastfm
-)
+from service.apple_music_service import poll_apple_music, print_polled_apple_music_song
+from service.lastfm_service import print_most_recent_scrobble, scrobble_to_lastfm
 
 bar = "=================================================="
 
