@@ -6,13 +6,13 @@ from service.lastfm_service import scrobble_to_lastfm
 scrobble_router = APIRouter()
 
 
-@scrobble_router.get("/scrobble/status")
+@scrobble_router.get("/scrobble/status/")
 async def scrobble_status():
     app_state = get_app_state()
     return {"is_scrobbling": app_state.is_scrobbling}
 
 
-@scrobble_router.post("/scrobble/toggle")
+@scrobble_router.post("/scrobble/toggle/")
 async def scrobble_toggle():
     app_state = get_app_state()
     is_scrobbling = app_state.is_scrobbling
@@ -20,7 +20,7 @@ async def scrobble_toggle():
     return {"is_scrobbling": app_state.is_scrobbling}
 
 
-@scrobble_router.post("/scrobble")
+@scrobble_router.post("/scrobble/")
 async def scrobble_song():
     app_state = get_app_state()
 

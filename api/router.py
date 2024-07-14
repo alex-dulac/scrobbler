@@ -16,7 +16,7 @@ router.include_router(scrobble_router)
 router.include_router(user_router)
 
 
-@router.get("/poll-song")
+@router.get("/poll-song/")
 async def get_current_song():
     app_state = get_app_state()
     result = poll_apple_music()
@@ -40,7 +40,7 @@ async def get_current_song():
     return {"current_song": app_state.current_song, "lastfm_album": app_state.lastfm_album}
 
 
-@router.get("/sync")
+@router.get("/state/")
 async def sync():
     app_state = get_app_state()
     return {
