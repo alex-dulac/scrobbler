@@ -1,4 +1,5 @@
 import applescript
+from loguru import logger
 
 from model import AppleMusicTrack
 
@@ -8,7 +9,7 @@ Apple Music related methods
 """
 
 
-def poll_apple_music() -> AppleMusicTrack | None:
+async def poll_apple_music() -> AppleMusicTrack | None:
     script = """
     tell application "Music"
         if it is running then
@@ -31,19 +32,10 @@ def poll_apple_music() -> AppleMusicTrack | None:
             return None
     except applescript.ScriptError as e:
         if e.number == -1728:
-            print("Apple Music is open but no song is selected.")
+            logger.info("Apple Music is open but no song is selected.")
             return None
         else:
-            print("Applescript Error:")
-            print(f"{e}")
+            logger.error(f"Applescript Error: {e}")
             return None
-
-
-def print_polled_apple_music_song(current_song: AppleMusicTrack | None) -> None:
-    if current_song:
-        print("Apple Music current song: ", current_song.name, " by ", current_song.artist)
-        print("Song is paused") if not current_song.playing else None
-    else:
-        print("Apple Music not playing")
 
 

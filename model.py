@@ -1,17 +1,3 @@
-class LastFmUserStats:
-    def __init__(
-            self,
-            playcount: str,
-            recent_tracks: list,
-            loved_tracks: list = None,
-            top_artists: list = None
-    ):
-        self.playcount = playcount
-        self.recent_tracks = recent_tracks
-        self.loved_tracks = loved_tracks
-        self.top_artists = top_artists
-
-
 class LastFmUser:
     def __init__(
             self,
@@ -87,11 +73,12 @@ class AppleMusicTrack:
             self,
             track_info,
             playing: bool = False,
-            scrobbled: bool = False
+            scrobbled: bool = False,
+            lastfm_updated_now_playing: bool = False,
     ):
         self.id = None
         self.index = None
-        self.name = None
+        self.track_name = None
         self.persistent_id = None
         self.time = None
         self.duration = None
@@ -110,6 +97,7 @@ class AppleMusicTrack:
         self.album_disliked = None
         self.playing = playing
         self.scrobbled = scrobbled
+        self.lastfm_updated_now_playing = lastfm_updated_now_playing
 
         ae_type_map = {
             "AEType(b'ID  ')": 'id',
@@ -137,3 +125,6 @@ class AppleMusicTrack:
             attr_name = ae_type_map.get(str(key))
             if attr_name:
                 setattr(self, attr_name, value)
+
+            if attr_name == 'name':
+                setattr(self, 'track_name', value)
