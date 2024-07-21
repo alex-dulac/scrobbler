@@ -24,7 +24,7 @@ Apple Music Scrobbler is a tool for tracking and logging your music listening ac
 
 1. **Clone the repository:**
     ```sh
-    git clone https://github.com/yourusername/apple-music-scrobbler.git
+    git clone https://github.com/alex-dulac/apple-music-scrobbler.git
     cd apple-music-scrobbler
     ```
 

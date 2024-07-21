@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from loguru import logger
 
+from api.spotify_router import spotify_router
 from api.data_router import data_router
 from api.scrobble_router import scrobble_router
 from api.state import get_app_state
@@ -17,6 +18,7 @@ router = APIRouter(dependencies=[
 
 router.include_router(data_router)
 router.include_router(scrobble_router)
+router.include_router(spotify_router)
 router.include_router(user_router)
 
 

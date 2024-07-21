@@ -9,14 +9,14 @@ from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmAlbum, LastFmT
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
-USERNAME = settings.USERNAME
-PASSWORD_HASH = pylast.md5(settings.PASSWORD)
+LASTFM_USERNAME = settings.LASTFM_USERNAME
+LASTFM_PASSWORD_HASH = pylast.md5(settings.LASTFM_PASSWORD)
 
 network = pylast.LastFMNetwork(
     api_key=LASTFM_API_KEY,
     api_secret=LASTFM_API_SECRET,
-    username=USERNAME,
-    password_hash=PASSWORD_HASH
+    username=LASTFM_USERNAME,
+    password_hash=LASTFM_PASSWORD_HASH
 )
 
 
@@ -26,7 +26,7 @@ LastFM API related methods
 
 
 async def get_user() -> pylast.User:
-    return network.get_user(settings.USERNAME)
+    return network.get_user(settings.LASTFM_USERNAME)
 
 
 async def get_user_minimal() -> LastFmUser:
