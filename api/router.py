@@ -9,6 +9,7 @@ from api.user_router import user_router
 from config.security import verify_token
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import update_lastfm_now_playing, get_lastfm_album, get_user_minimal
+from service.spotify_service import poll_spotify
 from utils import poll_comparison
 
 router = APIRouter(dependencies=[
@@ -25,11 +26,17 @@ router.include_router(user_router)
 @router.get("/poll-song/")
 async def get_current_song():
     app_state = await get_app_state()
-    current_song = app_state.current_song
-    lastfm_album = app_state.lastfm_album
-    poll = await poll_apple_music()
+    active_integration = app_state.active_integration
 
-    compare = await poll_comparison(poll, current_song, lastfm_album)
+    match active_integration:
+        case "APPLE_MUSIC":
+            poll = await poll_apple_music()
+        case "SPOTIFY":
+            poll = await poll_spotify()
+        case _:
+            raise ValueError("Invalid active integration")
+
+    compare = await poll_comparison(poll, app_state.current_song, app_state.lastfm_album)
 
     if compare["update_song"]:
         app_state.current_song = poll
@@ -59,5 +66,6 @@ async def sync():
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
         "is_scrobbling": app_state.is_scrobbling,
+        "active_integration": app_state.active_integration,
         "user": app_state.user
     }

@@ -14,7 +14,7 @@ auth = SpotifyOAuth(
 spotify = spotipy.Spotify(auth_manager=auth)
 
 
-async def get_user_now_playing():
+async def poll_spotify():
     result: dict = spotify.current_user_playing_track()
     if result:
         return result['item']['album']['name'], result['item']['artists'][0]['name'], result['item']['name']

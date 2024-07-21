@@ -1,4 +1,4 @@
-from model import AppleMusicTrack, LastFmAlbum, LastFmUser
+from model import AppleMusicTrack, LastFmAlbum, LastFmUser, ActiveIntegration
 
 
 class AppState:
@@ -7,6 +7,7 @@ class AppState:
         self.lastfm_album: LastFmAlbum | None = None
         self.is_scrobbling: bool = False
         self.user: LastFmUser | None = None
+        self.active_integration: ActiveIntegration | None = ActiveIntegration.APPLE_MUSIC
 
 
 app_state = AppState()
