@@ -1,6 +1,6 @@
 # py-scrobbler
 
-Apple Music Scrobbler is a tool for tracking and logging your music listening activity from Apple Music. It is built using Python and leverages several modern technologies to provide a seamless experience.
+py-scrobbler is a tool for tracking and logging your music listening activity from Apple Music and Spotify. It is built using Python and leverages several modern technologies to provide a seamless experience.
 
 
 
@@ -10,6 +10,7 @@ Apple Music Scrobbler is a tool for tracking and logging your music listening ac
 - **Uvicorn**: An ASGI server for running the FastAPI application.
 - **pylast**: A Python interface to Last.fm's API.
 - **applescript**: A Python library to run AppleScript commands, used to interact with the Apple Music application.
+- **spotipy**: A Python interface to Spotify's API.
 - **Loguru**: A library for logging, providing an easy and powerful logging experience.
 
 ## Getting Started
@@ -40,7 +41,7 @@ Apple Music Scrobbler is a tool for tracking and logging your music listening ac
     ```
 
 4. **Create a `.env` file:**
-   Copy the `.env.example` file to `.env` and fill in your Last.fm API credentials and other necessary environment variables.
+   Copy the `.env.example` file to `.env` and fill in your credentials and other necessary environment variables.
     ```sh
     cp .env.example .env
     ```
@@ -72,7 +73,7 @@ The `.env` file should contain the environment variables found in `.env.example`
 
 ## Frontend Integration
 
-This API is used with the following React project: [apple-music-scrobbler-web](https://github.com/alex-dulac/apple-music-scrobbler-web). 
+This API is used with the following React project: [scrobbler-web](https://github.com/alex-dulac/scrobbler-web). 
 The React project provides a web interface to interact with this API, allowing users to view their scrobbled tracks, recent activity, and more.
 
 ## Contributing
