@@ -29,9 +29,9 @@ async def get_current_song():
     active_integration = app_state.active_integration
 
     match active_integration:
-        case "APPLE_MUSIC":
+        case active_integration.APPLE_MUSIC:
             poll = await poll_apple_music()
-        case "SPOTIFY":
+        case active_integration.SPOTIFY:
             poll = await poll_spotify()
         case _:
             raise ValueError("Invalid active integration")
@@ -40,11 +40,11 @@ async def get_current_song():
 
     if compare["update_song"]:
         app_state.current_song = poll
-        logger.info(f"Updated current song: {poll.track_name}")
+        logger.info(f"Updated current song: {poll.name}")
 
     if compare["update_song_playing_status"]:
         app_state.current_song.playing = poll.playing
-        logger.info(f"Updated '{poll.track_name}' playing status: {poll.playing}")
+        logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
 
     if compare["update_lastfm_now_playing"]:
         await update_lastfm_now_playing(app_state.current_song)

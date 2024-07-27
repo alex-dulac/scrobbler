@@ -1,8 +1,7 @@
 import applescript
 from loguru import logger
 
-from model import AppleMusicTrack
-
+from models.track import AppleMusicTrack
 
 """
 Apple Music related methods

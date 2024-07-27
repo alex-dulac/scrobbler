@@ -1,8 +1,8 @@
 from loguru import logger
 
 from api.state import AppState
-from model import AppleMusicTrack, LastFmAlbum
-
+from models.lastfm_models import LastFmAlbum
+from models.track import AppleMusicTrack, Track
 
 ALREADY_SCROBBLED = "This song has already been scrobbled."
 NO_SONG = "No song playing"
@@ -46,7 +46,10 @@ async def validate_scrobble_in_state(state: AppState) -> bool:
     return True
 
 
-async def validate_scrobble_in_loop(current_song: AppleMusicTrack | None, previous_song: AppleMusicTrack | None) -> bool:
+async def validate_scrobble_in_loop(
+        current_song: AppleMusicTrack | None,
+        previous_song: AppleMusicTrack | None
+) -> bool:
     if not current_song:
         logger.info(NO_SONG)
         return False

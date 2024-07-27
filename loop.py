@@ -3,7 +3,8 @@ import signal
 
 from loguru import logger
 
-from model import AppleMusicTrack
+from models.integrations import Integration
+from models.track import AppleMusicTrack, SpotifyTrack
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import scrobble_to_lastfm, update_lastfm_now_playing
 from utils import poll_comparison, validate_scrobble_in_loop
@@ -28,8 +29,15 @@ def signal_handler(signal, frame) -> None:
 
 
 async def run() -> None:
-    current_song: AppleMusicTrack | None = None
-    previous_song: AppleMusicTrack | None = None
+    current_song = None
+    previous_song = None
+
+    if active_integration == Integration.APPLE_MUSIC:
+        current_song: AppleMusicTrack | None
+        previous_song: AppleMusicTrack | None
+    elif active_integration == Integration.SPOTIFY:
+        current_song: SpotifyTrack | None
+        previous_song: SpotifyTrack | None
 
     loop_count = 0
     scrobble_count = 0
@@ -41,7 +49,7 @@ async def run() -> None:
 
         poll = await poll_apple_music()
         if poll:
-            logger.info(f"Apple Music current song: '{poll.track_name}' by {poll.artist}")
+            logger.info(f"Apple Music current song: '{poll.name}' by {poll.artist}")
             logger.info(f"Playing" if poll.playing else "Paused")
         else:
             logger.info("No song is currently playing.")

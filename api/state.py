@@ -1,13 +1,16 @@
-from model import AppleMusicTrack, LastFmAlbum, LastFmUser, ActiveIntegration
+from models.integrations import Integration
+from models.lastfm_models import LastFmAlbum
+from models.track import AppleMusicTrack, SpotifyTrack
+from models.user import LastFmUser
 
 
 class AppState:
     def __init__(self):
-        self.current_song: AppleMusicTrack | None = None
+        self.current_song: AppleMusicTrack| SpotifyTrack | None = None
         self.lastfm_album: LastFmAlbum | None = None
         self.is_scrobbling: bool = False
         self.user: LastFmUser | None = None
-        self.active_integration: ActiveIntegration | None = ActiveIntegration.APPLE_MUSIC
+        self.active_integration: Integration | None = Integration.APPLE_MUSIC
 
 
 app_state = AppState()

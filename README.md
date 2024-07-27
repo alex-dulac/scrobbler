@@ -17,8 +17,9 @@ py-scrobbler is a tool for tracking and logging your music listening activity fr
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Apple Music application installed on your macOS
+- Spotify account
 - Last.fm account
 
 ### Installation

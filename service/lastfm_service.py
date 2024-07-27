@@ -5,7 +5,9 @@ import pylast
 from loguru import logger
 
 from config import settings
-from model import AppleMusicTrack, LastFmTrack, LastFmUser, LastFmAlbum, LastFmTopItem, LastFmArtist
+from models.lastfm_models import LastFmTrack, LastFmTopItem, LastFmAlbum, LastFmArtist
+from models.track import AppleMusicTrack
+from models.user import LastFmUser
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
@@ -93,7 +95,7 @@ async def get_user_top_artists() -> list[LastFmTopItem]:
             url=details.get_url()
         )
         top_item = LastFmTopItem(
-            name=artist.item.track_name,
+            name=artist.item.name,
             weight=artist.weight,
             details=model
         )
@@ -129,7 +131,7 @@ async def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
     try:
         network.update_now_playing(
             artist=current_song.artist,
-            title=current_song.track_name,
+            title=current_song.name,
             album=current_song.album
         )
         logger.info("Updated Last.fm now playing")
@@ -140,7 +142,7 @@ async def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
 
 async def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
     artist = current_song.artist
-    track = current_song.track_name
+    track = current_song.name
     album = current_song.album
     timestamp = int(time.time())
 
@@ -170,7 +172,7 @@ async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
 
 async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[LastFmTrack]:
     user = await get_user()
-    track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.track_name)
+    track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
 
     tracks = []
     for t in track_scrobbles:
