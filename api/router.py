@@ -10,7 +10,7 @@ from config.security import verify_token
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import update_lastfm_now_playing, get_lastfm_album, get_user_minimal
 from service.spotify_service import poll_spotify
-from utils import poll_comparison
+from helpers.utils import poll_comparison
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),
@@ -67,5 +67,5 @@ async def sync():
         "lastfm_album": app_state.lastfm_album,
         "is_scrobbling": app_state.is_scrobbling,
         "active_integration": app_state.active_integration,
-        "user": app_state.user
+        "user": await get_user_minimal()
     }

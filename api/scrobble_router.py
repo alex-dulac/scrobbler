@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from api.state import get_app_state
 from service.lastfm_service import scrobble_to_lastfm
-from utils import validate_scrobble_in_state
+from helpers.utils import validate_scrobble_in_state
 
 scrobble_router = APIRouter()
 

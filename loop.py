@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import signal
 
@@ -7,11 +8,12 @@ from models.integrations import Integration
 from models.track import AppleMusicTrack, SpotifyTrack
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import scrobble_to_lastfm, update_lastfm_now_playing
-from utils import poll_comparison, validate_scrobble_in_loop
+from helpers.utils import poll_comparison, validate_scrobble_in_loop
 
 bar = "=" * 130
 loop = True
-wait = 30
+duration = 30
+active_integration = Integration.APPLE_MUSIC
 
 
 async def stop() -> None:
@@ -22,6 +24,27 @@ async def stop() -> None:
     print(bar)
     print("\n")
     loop = False
+
+
+def handle_arguments() -> None:
+    global active_integration
+    global duration
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--integration", type=str, required=False)
+    parser.add_argument("--duration", type=int, required=False)
+
+    args = parser.parse_args()
+    if args.integration:
+        match args.integration.upper():
+            case Integration.APPLE_MUSIC.name:
+                active_integration = Integration.APPLE_MUSIC
+            case Integration.SPOTIFY.name:
+                active_integration = Integration.SPOTIFY
+            case _:
+                raise ValueError(f"Invalid integration: {args.integration.upper()}")
+    if args.duration:
+        duration = args.duration
 
 
 def signal_handler(signal, frame) -> None:
@@ -74,9 +97,12 @@ async def run() -> None:
 
         print(bar)
 
-        for i in range(wait):
+        for i in range(duration):
             if not loop:
                 break
+            if current_song and current_song.playing:
+                # TODO poll every second to see if the song is still playing to accurately count time played?
+                current_song.time_played += 1
             print(f"{'.' * (i + 1)}", end="\r")
             await asyncio.sleep(1)
 
@@ -84,6 +110,7 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
+    handle_arguments()
     event_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(event_loop)
     signal.signal(signal.SIGINT, signal_handler)
