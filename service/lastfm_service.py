@@ -5,8 +5,10 @@ import pylast
 from loguru import logger
 
 from config import settings
-from models.lastfm_models import LastFmTrack, LastFmTopItem, LastFmAlbum, LastFmArtist
-from models.track import AppleMusicTrack
+from models.album import LastFmAlbum
+from models.artist import LastFmArtist
+from models.lastfm_models import LastFmTopItem
+from models.track import AppleMusicTrack, LastFmTrack
 from models.user import LastFmUser
 
 LASTFM_API_KEY = settings.LASTFM_API_KEY
@@ -47,20 +49,25 @@ async def get_user_playcount() -> str:
     return playcount
 
 
-async def get_user_recent_tracks() -> list[LastFmTrack]:
+async def get_user_recent_tracks() -> list[list[LastFmTrack | LastFmAlbum | None]]:
     user = await get_user()
 
     recent_tracks = user.get_recent_tracks(limit=20)
     tracks = []
     for track in recent_tracks:
         scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
+        album_name = track.album
+        artist_name = track.track.artist.name
+
         t = LastFmTrack(
             name=track.track.title,
-            artist=track.track.artist.name,
-            album=track.album,
+            artist=artist_name,
+            album=album_name,
             scrobbled_at=scrobbled_at.strftime('%Y-%m-%d %H:%M:%S')
         )
-        tracks.append(t)
+        a = await get_lastfm_album(album_name, artist_name)
+
+        tracks.append([t, a])
 
     return tracks
 
@@ -159,11 +166,18 @@ async def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
 
 async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
     album = network.get_album(title=title, artist=artist)
+    try:
+        image_url = album.get_cover_image(size=pylast.SIZE_MEGA)
+    except pylast.WSError as e:
+        logger.error(f"Failed to get album cover image for {title} - {artist}")
+        logger.error(f"{e}")
+        image_url = None
+
     if album:
         return LastFmAlbum(
             title=album.title,
             artist=album.artist.name,
-            image_url=album.get_cover_image(),
+            image_url=image_url,
             url=album.get_url()
         )
     else:
