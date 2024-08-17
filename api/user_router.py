@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from api.state import get_app_state
+from service.apple_music_service import get_macos_information
 from service.lastfm_service import (
     get_user_recent_tracks,
     get_user_playcount,
@@ -18,6 +19,11 @@ user_router = APIRouter()
 @user_router.get("/user/")
 async def user():
     return {"user": await get_user_minimal()}
+@user_router.get("/user/accounts/apple-music/")
+async def user():
+    return {"mac_os": await get_macos_information()}
+
+
 
 
 @user_router.get("/user/recent-tracks/")
