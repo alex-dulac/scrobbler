@@ -12,6 +12,7 @@ from service.lastfm_service import (
     current_track_user_scrobbles,
     user_weekly_album_charts
 )
+from service.spotify_service import get_spotify_account_information
 
 user_router = APIRouter()
 
@@ -24,6 +25,9 @@ async def user():
     return {"mac_os": await get_macos_information()}
 
 
+@user_router.get("/user/accounts/spotify/")
+async def user():
+    return {"spotify_account": await get_spotify_account_information()}
 
 
 @user_router.get("/user/recent-tracks/")

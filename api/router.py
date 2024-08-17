@@ -11,6 +11,7 @@ from service.apple_music_service import poll_apple_music
 from service.lastfm_service import update_lastfm_now_playing, get_lastfm_album, get_user_minimal
 from service.spotify_service import poll_spotify
 from helpers.utils import poll_comparison
+from service.spotify_service import poll_spotify, get_artist_from_name
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),
@@ -53,9 +54,12 @@ async def get_current_song():
     if compare["update_lastfm_album"]:
         app_state.lastfm_album = await get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
 
+    spotify_artist = await get_artist_from_name(app_state.current_song.artist)
+
     return {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album
+        "artist_image": spotify_artist.image_url,
     }
 
 
