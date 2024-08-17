@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 
 import pylast
+import requests
 from loguru import logger
 
 from config import settings
@@ -11,6 +12,7 @@ from models.lastfm_models import LastFmTopItem
 from models.track import AppleMusicTrack, LastFmTrack
 from models.user import LastFmUser
 
+LASTFM_API_URL = settings.LASTFM_API_URL
 LASTFM_API_KEY = settings.LASTFM_API_KEY
 LASTFM_API_SECRET = settings.LASTFM_API_SECRET
 LASTFM_USERNAME = settings.LASTFM_USERNAME
@@ -33,12 +35,41 @@ async def get_user() -> pylast.User:
     return network.get_user(settings.LASTFM_USERNAME)
 
 
-async def get_user_minimal() -> LastFmUser:
-    user = await get_user()
+# https://www.last.fm/api/show/user.getInfo
+# Manual API call
+async def get_lastfm_account_details() -> LastFmUser:
+    params = {
+        'method': 'user.getInfo',
+        'user': LASTFM_USERNAME,
+        'api_key': LASTFM_API_KEY,
+        'format': 'json'
+    }
+
+    response = requests.get(LASTFM_API_URL, params=params)
+    user_info = response.json()['user']
+
+    registered_at = None
+    if 'unixtime' in user_info['registered']:
+        registered_at = datetime.fromtimestamp(int(user_info['registered']['unixtime']))
+
+    playcount = format(int(user_info['playcount']), ',')
+    track_count = format(int(user_info['track_count']), ',')
+    album_count = format(int(user_info['album_count']), ',')
+    artist_count = format(int(user_info['artist_count']), ',')
+    image_url = user_info['image'][3]['#text']
+
     return LastFmUser(
-        name=user.get_name(),
-        image_url=user.get_image(),
-        url=user.get_url()
+        album_count=album_count,
+        artist_count=artist_count,
+        country=user_info['country'],
+        image_url=image_url,
+        name=user_info['name'],
+        playcount=playcount,
+        realname=user_info['realname'],
+        registered=registered_at,
+        subscriber=user_info['subscriber'],
+        track_count=track_count,
+        url=user_info['url']
     )
 
 

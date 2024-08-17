@@ -5,12 +5,11 @@ from service.apple_music_service import get_macos_information
 from service.lastfm_service import (
     get_user_recent_tracks,
     get_user_playcount,
-    get_user_minimal,
     get_user_loved_tracks,
     get_user_top_artists,
     get_user_top_albums,
     current_track_user_scrobbles,
-    user_weekly_album_charts
+    user_weekly_album_charts, get_lastfm_account_details
 )
 from service.spotify_service import get_spotify_account_information
 
@@ -19,7 +18,14 @@ user_router = APIRouter()
 
 @user_router.get("/user/")
 async def user():
-    return {"user": await get_user_minimal()}
+    return {"user": await get_lastfm_account_details()}
+
+
+@user_router.get("/user/accounts/lastfm")
+async def user():
+    return {"user": await get_lastfm_account_details()}
+
+
 @user_router.get("/user/accounts/apple-music/")
 async def user():
     return {"mac_os": await get_macos_information()}

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Last.fm
+LASTFM_API_URL = "http://ws.audioscrobbler.com/2.0/"
 LASTFM_API_KEY = os.getenv('LASTFM_API_KEY')
 LASTFM_API_SECRET = os.getenv('LASTFM_API_SECRET')
 LASTFM_USERNAME = os.getenv('LASTFM_USERNAME')
