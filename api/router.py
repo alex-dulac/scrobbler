@@ -55,11 +55,13 @@ async def get_current_song():
 
     spotify_artist = await get_artist_from_name(app_state.current_song.artist)
 
-    return {
+    data = {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
-        "artist_image": spotify_artist.image_url,
+        "artist_image": spotify_artist.image_url[0],
     }
+
+    return {"data": data}
 
 
 @router.get("/poll-song/artwork")

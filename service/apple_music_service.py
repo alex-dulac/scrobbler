@@ -71,6 +71,8 @@ async def get_current_track_artwork_data() -> str | None:
         await handle_applescript_error(e)
 
 
+# Apparently, Apple Music does not provide very much information about the user account via applescript
+# Getting mac os information as an alternative
 async def get_macos_information() -> MacOSSystemInfo | None:
     script = """
     set sysInfo to system info

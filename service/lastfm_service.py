@@ -222,7 +222,7 @@ async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[La
     tracks = []
     for t in track_scrobbles:
         timestamp = int(t.timestamp)
-        timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S.000Z')
         track = LastFmTrack(
             name=t.track.title,
             artist=t.track.artist.name,
@@ -234,14 +234,16 @@ async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[La
     return tracks
 
 
+async def user_weekly_artist_charts(from_date, to_date):
+    user = await get_user()
+    chart_dates = user.get_weekly_chart_dates()
+    print(chart_dates)
+
+
 async def user_weekly_album_charts(from_date, to_date):
     user = await get_user()
     albums = user.get_weekly_album_charts(from_date, to_date)
-    for album in albums:
-        details = album.item
-        model = LastFmAlbum(
-            title=details.title,
-            artist=details.artist.name
-        )
-        print(model.title, model.artist)
+
+    for album, playcount in albums:
+        print(f"Album: {album.artist} - {album.title}, Playcount: {playcount}")
 

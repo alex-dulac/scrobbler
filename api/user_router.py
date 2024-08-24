@@ -26,7 +26,7 @@ async def user():
     return {"user": await get_lastfm_account_details()}
 
 
-@user_router.get("/user/accounts/apple-music/")
+@user_router.get("/user/accounts/apple/")
 async def user():
     return {"mac_os": await get_macos_information()}
 
@@ -61,13 +61,13 @@ async def playcount():
     return {"playcount": await get_user_playcount()}
 
 
-@user_router.get("/user/track-scrobbles/")
+@user_router.get("/user/current-track-scrobbles/")
 async def get_track_scrobbles():
     app_state = await get_app_state()
 
     result = await current_track_user_scrobbles(app_state.current_song) if app_state.current_song else None
 
-    return {"track_scrobbles": result}
+    return {"scrobbles": result}
 
 
 @user_router.get("/user/charts/albums/weekly/")
