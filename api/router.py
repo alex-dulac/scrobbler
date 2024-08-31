@@ -53,12 +53,13 @@ async def get_current_song():
     if compare["update_lastfm_album"]:
         app_state.lastfm_album = await get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
 
-    spotify_artist = await get_artist_from_name(app_state.current_song.artist)
+    spotify_artist = await get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None
+    artist_image = spotify_artist.image_url[0] if spotify_artist else None
 
     data = {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
-        "artist_image": spotify_artist.image_url[0],
+        "artist_image": artist_image,
     }
 
     return {"data": data}
