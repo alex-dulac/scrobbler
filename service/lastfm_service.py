@@ -234,16 +234,22 @@ async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[La
     return tracks
 
 
-async def user_weekly_artist_charts(from_date, to_date):
+async def user_weekly_chart_dates():
     user = await get_user()
-    chart_dates = user.get_weekly_chart_dates()
-    print(chart_dates)
+    return user.get_weekly_chart_dates()
 
 
-async def user_weekly_album_charts(from_date, to_date):
+async def user_weekly_album_charts(from_date: str, to_date: str):
     user = await get_user()
-    albums = user.get_weekly_album_charts(from_date, to_date)
+    weekly_albums = user.get_weekly_album_charts(from_date, to_date)
 
-    for album, playcount in albums:
-        print(f"Album: {album.artist} - {album.title}, Playcount: {playcount}")
+    results = []
+    for album, playcount in weekly_albums:
+        album_name = album.title
+        artist_name = album.artist.name
 
+        last_fm_album = await get_lastfm_album(album_name, artist_name)
+        last_fm_album.playcount = playcount
+        results.append(last_fm_album)
+
+    return results

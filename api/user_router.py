@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import time
+
+from fastapi import APIRouter, Query
 
 from api.state import get_app_state
 from service.apple_music_service import get_macos_information
@@ -9,7 +11,9 @@ from service.lastfm_service import (
     get_user_top_artists,
     get_user_top_albums,
     current_track_user_scrobbles,
-    user_weekly_album_charts, get_lastfm_account_details
+    user_weekly_album_charts,
+    get_lastfm_account_details,
+    user_weekly_chart_dates
 )
 from service.spotify_service import get_spotify_account_information
 
@@ -71,7 +75,25 @@ async def get_track_scrobbles():
 
 
 @user_router.get("/user/charts/albums/weekly/")
-async def get_weekly_album_charts(from_date: str, to_date: str):
+async def get_weekly_album_charts(
+        from_date: str | None = Query(None, description="Start date for the weekly album charts"),
+        to_date: str | None = Query(None, description="End date for the weekly album charts")
+):
+    """
+    Get the weekly album charts for the given date range.
+    If no date range is provided, it defaults to the current week.
+    """
+    if to_date is None and from_date is None:
+        to_date = int(time.time())
+        from_date = to_date - (7 * 86400)
+
     results = await user_weekly_album_charts(from_date, to_date)
+
+    return {"data": results}
+
+
+@user_router.get("/user/weekly-chart-dates/")
+async def get_weekly_chart_dates():
+    results = await user_weekly_chart_dates()
 
     return {"data": results}

@@ -18,9 +18,11 @@ class LastFmAlbum(Album):
                  image_url: str = None,
                  url: str = None,
                  tracks: list[str] = None,
+                 playcount: int = None,
     ):
         super().__init__(title=title, artist=artist, release_date=release_date)
         self.image_url = image_url
         self.url = url
         self.tracks = tracks
+        self.playcount = playcount
 
