@@ -9,9 +9,9 @@ from config import settings
 from models.album import LastFmAlbum
 from models.artist import LastFmArtist
 from models.lastfm_models import LastFmTopItem
-from models.track import AppleMusicTrack, LastFmTrack
+from models.track import AppleMusicTrack, LastFmTrack, Track
 from models.user import LastFmUser
-from utils import clean_up_album_title
+from utils import clean_up_title
 
 LASTFM_API_URL = settings.LASTFM_API_URL
 LASTFM_API_KEY = settings.LASTFM_API_KEY
@@ -179,16 +179,27 @@ async def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
         logger.error(f"{e}")
 
 
-async def scrobble_to_lastfm(current_song: AppleMusicTrack) -> bool:
+async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> bool:
     artist = current_song.artist
     track = current_song.name
     album = current_song.album
     timestamp = int(time.time())
 
+    clean_track = None
+    clean_album = None
+    if clean:
+        clean_track = await clean_up_title(track)
+        clean_album = await clean_up_title(album)
+
     if artist and track and album:
         try:
-            network.scrobble(artist=artist, title=track, timestamp=timestamp, album=album)
-            logger.info(f"Scrobbled to LastFm: '{artist}' - {track}")
+            network.scrobble(
+                artist=artist,
+                title=clean_track if clean_track else track,
+                timestamp=timestamp,
+                album=clean_album if clean_album else album
+            )
+            logger.info(f"Scrobbled to LastFm: '{artist}' - {clean_track if clean_track else track}")
             return True
         except pylast.WSError as e:
             logger.error("Failed to scrobble to Last.fm")
@@ -206,7 +217,7 @@ async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
         image_url = None
 
     if image_url is None:
-        clean_title = await clean_up_album_title(title)
+        clean_title = await clean_up_title(title)
         clean_album = network.get_album(title=clean_title, artist=artist)
         try:
             image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)

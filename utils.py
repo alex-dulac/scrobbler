@@ -96,20 +96,21 @@ async def validate_scrobble_in_loop(
     return True
 
 
-async def clean_up_album_title(album_title: str) -> str:
+async def clean_up_title(title: str) -> str:
     """
-    Clean up the album title to get the actual album name.
-    Example: High 'N' Dry (Remastered 2018)
-    Returns: High 'N' Dry
+    Clean up the album or song title to get the actual name.
+    Examples: High 'N' Dry (Remastered 2018), Time to Break Up (Bonus Track)
+    Returns: High 'N' Dry, Time to Break Up
 
     Args:
-        album_title (str): The album title to clean up.
+        title (str): The title to clean up.
 
     Returns:
-        str: The cleaned up album title.
+        str: The cleaned up title.
     """
 
-    # Remove substrings in parentheses containing 'remastered' (case-insensitive)
-    clean_title = re.sub(r'\([^)]*remastered[^)]*\)', '', album_title, flags=re.IGNORECASE).strip()
+    # Remove substrings in parentheses or brackets containing 'remastered' or 'bonus' (case-insensitive)
+    clean_title = re.sub(r'[\(\[][^)\]]*remastered[^)\]]*[\)\]]', '', title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'[\(\[][^)\]]*bonus[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
 
     return clean_title
