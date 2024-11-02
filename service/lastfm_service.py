@@ -11,6 +11,7 @@ from models.artist import LastFmArtist
 from models.lastfm_models import LastFmTopItem
 from models.track import AppleMusicTrack, LastFmTrack
 from models.user import LastFmUser
+from utils import clean_up_album_title
 
 LASTFM_API_URL = settings.LASTFM_API_URL
 LASTFM_API_KEY = settings.LASTFM_API_KEY
@@ -203,6 +204,16 @@ async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
         logger.error(f"Failed to get album cover image for {title} - {artist}")
         logger.error(f"{e}")
         image_url = None
+
+    if image_url is None:
+        clean_title = await clean_up_album_title(title)
+        clean_album = network.get_album(title=clean_title, artist=artist)
+        try:
+            image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
+        except pylast.WSError as e:
+            logger.error(f"Failed to get album cover image for {clean_title} - {artist}")
+            logger.error(f"{e}")
+            image_url = None
 
     if album:
         return LastFmAlbum(

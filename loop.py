@@ -8,7 +8,7 @@ from models.integrations import Integration
 from models.track import AppleMusicTrack, SpotifyTrack
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import scrobble_to_lastfm, update_lastfm_now_playing
-from helpers.utils import poll_comparison, validate_scrobble_in_loop
+from utils import poll_comparison, validate_scrobble_in_loop
 
 bar = "=" * 130
 loop = True

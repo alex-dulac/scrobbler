@@ -1,3 +1,5 @@
+import re
+
 from loguru import logger
 
 from api.state import AppState
@@ -92,3 +94,22 @@ async def validate_scrobble_in_loop(
         return False
 
     return True
+
+
+async def clean_up_album_title(album_title: str) -> str:
+    """
+    Clean up the album title to get the actual album name.
+    Example: High 'N' Dry (Remastered 2018)
+    Returns: High 'N' Dry
+
+    Args:
+        album_title (str): The album title to clean up.
+
+    Returns:
+        str: The cleaned up album title.
+    """
+
+    # Remove substrings in parentheses containing 'remastered' (case-insensitive)
+    clean_title = re.sub(r'\([^)]*remastered[^)]*\)', '', album_title, flags=re.IGNORECASE).strip()
+
+    return clean_title

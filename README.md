@@ -54,13 +54,17 @@ The `.env` file should contain the environment variables found in `.env.example`
 ### Running the Application
 
 1. **Start the FastAPI server:**
+2. ```sh
+    python app.py
+    ```
+   or
     ```sh
     uvicorn app:app --reload
     ```
 
 2. **Run the loop script:**
     ```sh
-    python run_as_loop.py
+    python loop.py
     ```
 
 ### Key Files
@@ -81,6 +85,3 @@ The React project provides a web interface to interact with this API, allowing u
 
 Contributions are welcome! Please open an issue or submit a pull request for any changes.
 
-## License
-
-See the [LICENSE](LICENSE.txt) file for details.
