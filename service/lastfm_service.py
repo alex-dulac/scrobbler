@@ -166,7 +166,7 @@ async def get_user_top_albums() -> list[LastFmTopItem]:
     return albums
 
 
-async def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
+async def update_lastfm_now_playing(current_song: Track) -> None:
     try:
         network.update_now_playing(
             artist=current_song.artist,
@@ -175,8 +175,7 @@ async def update_lastfm_now_playing(current_song: AppleMusicTrack) -> None:
         )
         logger.info("Updated Last.fm now playing")
     except pylast.WSError as e:
-        logger.error("Failed to update Last.fm now playing")
-        logger.error(f"{e}")
+        logger.error(f"Failed to update Last.fm now playing: {e}")
 
 
 async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> bool:
@@ -202,29 +201,46 @@ async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> bool:
             logger.info(f"Scrobbled to LastFm: '{artist}' - {clean_track if clean_track else track}")
             return True
         except pylast.WSError as e:
-            logger.error("Failed to scrobble to Last.fm")
-            logger.error(f"{e}")
+            logger.error("Failed to scrobble to Last.fm: {e}")
             return False
+
+
+async def get_album_image_url(album: pylast.Album) -> str | None:
+    """
+    Retrieves the cover image URL for a given album.
+
+    Attempts to fetch the album's cover image using the provided album object.
+    If the initial attempt fails, it tries to clean the album title and fetch
+    the cover image again.
+
+    Parameters:
+    album (pylast.Album): The album object for which the cover image URL is to be retrieved.
+
+    Returns:
+    str | None: The URL of the album's cover image if available, otherwise None.
+    """
+    image_url = None
+
+    try:
+        image_url = album.get_cover_image(size=pylast.SIZE_MEGA)
+    except pylast.WSError as e:
+        logger.error(f"Failed to get album image_url: {e}")
+
+    if image_url is None:
+        clean_title = await clean_up_title(album.title)
+        clean_album = network.get_album(title=clean_title, artist=album.artist.name)
+        try:
+            image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
+        except pylast.WSError as e:
+            logger.error(f"Failed to get album image_url: {e}")
+
+    return image_url
 
 
 async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
     album = network.get_album(title=title, artist=artist)
-    try:
-        image_url = album.get_cover_image(size=pylast.SIZE_MEGA)
-    except pylast.WSError as e:
-        logger.error(f"Failed to get album cover image for {title} - {artist}")
-        logger.error(f"{e}")
-        image_url = None
 
-    if image_url is None:
-        clean_title = await clean_up_title(title)
-        clean_album = network.get_album(title=clean_title, artist=artist)
-        try:
-            image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
-        except pylast.WSError as e:
-            logger.error(f"Failed to get album cover image for {clean_title} - {artist}")
-            logger.error(f"{e}")
-            image_url = None
+    image_url = await get_album_image_url(album)
 
     if album:
         return LastFmAlbum(
