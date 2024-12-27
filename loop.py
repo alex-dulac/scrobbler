@@ -14,15 +14,29 @@ bar = "=" * 130
 loop = True
 duration = 30
 active_integration = Integration.APPLE_MUSIC
+session_scrobbles = []
 
 
 async def stop() -> None:
     global loop
+    global session_scrobbles
+
     print("\n")
+    print("Scrobbles during this session:")
+    print("\n")
+
+    for scrobble in session_scrobbles:
+        print(scrobble.name)
+        print(scrobble.artist)
+        print(scrobble.album)
+        print(scrobble.scrobbled_at)
+        print("\n")
+
     print(bar)
-    print("Exiting...")
+    print("Thank you for scrobbling. Bye.")
     print(bar)
     print("\n")
+
     loop = False
 
 
@@ -90,7 +104,8 @@ async def run() -> None:
             current_song.lastfm_updated_now_playing = True
 
         if await validate_scrobble_in_loop(current_song, previous_song):
-            await scrobble_to_lastfm(current_song)
+            scrobbled_track = await scrobble_to_lastfm(current_song)
+            session_scrobbles.append(scrobbled_track)
             current_song.scrobbled = True
             previous_song = current_song
             scrobble_count += 1

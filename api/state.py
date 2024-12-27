@@ -1,6 +1,8 @@
+from typing import List
+
 from models.integrations import Integration
 from models.lastfm_models import LastFmAlbum
-from models.track import AppleMusicTrack, SpotifyTrack
+from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
 from models.user import LastFmUser
 
 
@@ -12,6 +14,7 @@ class AppState:
         self.is_scrobbling: bool = False
         self.user: LastFmUser | None = None
         self.active_integration: Integration | None = Integration.APPLE_MUSIC
+        self.session_scrobbles: List[LastFmTrack] = []
 
 
 app_state = AppState()

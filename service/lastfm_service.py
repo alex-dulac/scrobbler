@@ -178,7 +178,7 @@ async def update_lastfm_now_playing(current_song: Track) -> None:
         logger.error(f"Failed to update Last.fm now playing: {e}")
 
 
-async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> bool:
+async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> LastFmTrack | None:
     artist = current_song.artist
     track = current_song.name
     album = current_song.album
@@ -199,10 +199,16 @@ async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> bool:
                 album=clean_album if clean_album else album
             )
             logger.info(f"Scrobbled to LastFm: '{artist}' - {clean_track if clean_track else track}")
-            return True
+            return LastFmTrack(
+                name=clean_track if clean_track else track,
+                artist=artist,
+                album=clean_album if clean_album else album,
+                scrobbled_at=datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+            )
+
         except pylast.WSError as e:
-            logger.error("Failed to scrobble to Last.fm: {e}")
-            return False
+            logger.error(f"Failed to scrobble to Last.fm: {e}")
+            return None
 
 
 async def get_album_image_url(album: pylast.Album) -> str | None:
@@ -255,6 +261,10 @@ async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
 
 async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[LastFmTrack]:
     user = await get_user()
+
+    # TODO implement multiple fetches if the title is not clean
+    # example: if listening to "Cool Song (Remastered 2021)",
+    # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc.
     track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
 
     tracks = []

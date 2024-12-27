@@ -79,6 +79,15 @@ class LastFmTrack(Track):
         self.scrobbled_at = scrobbled_at
         self.loved_at = loved_at
 
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "artist": self.artist,
+            "album": self.album,
+            "scrobbled_at": self.scrobbled_at,
+            "loved_at": self.loved_at
+        }
+
 
 class SpotifyTrack(Track):
     pass
