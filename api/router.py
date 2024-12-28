@@ -38,19 +38,19 @@ async def get_current_song():
 
     compare = await poll_comparison(poll, app_state.current_song, app_state.lastfm_album)
 
-    if compare["update_song"]:
+    if compare.update_song:
         app_state.current_song = poll
         logger.info(f"Updated current song: {poll.name}")
 
-    if compare["update_song_playing_status"]:
+    if compare.update_song_playing_status:
         app_state.current_song.playing = poll.playing
         logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
 
-    if compare["update_lastfm_now_playing"]:
+    if compare.update_lastfm_now_playing:
         await update_lastfm_now_playing(app_state.current_song)
         app_state.current_song.lastfm_updated_now_playing = True
 
-    if compare["update_lastfm_album"]:
+    if compare.update_lastfm_album:
         app_state.lastfm_album = await get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
 
     spotify_artist = await get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None

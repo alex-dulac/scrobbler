@@ -13,11 +13,25 @@ NOT_PLAYING = "Current song is not playing."
 SCROBBLING_NOT_ENABLED = "Scrobbling is not enabled."
 
 
+class Comparison:
+    def __init__(
+            self,
+            update_song: bool = False,
+            update_song_playing_status: bool = False,
+            update_lastfm_now_playing: bool = False,
+            update_lastfm_album: bool = False
+    ) -> None:
+        self.update_song = update_song
+        self.update_song_playing_status = update_song_playing_status
+        self.update_lastfm_now_playing = update_lastfm_now_playing
+        self.update_lastfm_album = update_lastfm_album
+
+
 async def poll_comparison(
         poll: Track,
         current_song: Track | None,
         lastfm_album: LastFmAlbum | None
-) -> dict[str, bool]:
+) -> Comparison:
     update_song = (
         poll and
         (current_song is None or poll.name != current_song.name)
@@ -40,12 +54,12 @@ async def poll_comparison(
         (poll and (lastfm_album is None or current_song.album != lastfm_album.title))
     )
 
-    return {
-        "update_song": update_song,
-        "update_song_playing_status": update_song_playing_status,
-        "update_lastfm_now_playing": update_lastfm_now_playing,
-        "update_lastfm_album": update_lastfm_album,
-    }
+    return Comparison(
+        update_song=update_song,
+        update_song_playing_status=update_song_playing_status,
+        update_lastfm_now_playing=update_lastfm_now_playing,
+        update_lastfm_album=update_lastfm_album,
+    )
 
 
 async def validate_scrobble_in_state(state: AppState) -> bool:
@@ -76,17 +90,12 @@ async def validate_scrobble_in_loop(
         logger.info(NO_SONG)
         return False
 
-    if not current_song.time_played > 60:
-        logger.info(KEEP_LISTENING)
-        logger.info(f"Time played: {current_song.time_played}")
+    if not current_song.playing:
+        logger.info(NOT_PLAYING)
         return False
 
     if current_song.scrobbled:
         logger.info(ALREADY_SCROBBLED)
-        return False
-
-    if not current_song.playing:
-        logger.info(NOT_PLAYING)
         return False
 
     if previous_song and previous_song.id == current_song.id:
