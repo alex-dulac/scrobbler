@@ -166,7 +166,7 @@ async def get_user_top_albums() -> list[LastFmTopItem]:
     return albums
 
 
-async def update_lastfm_now_playing(current_song: Track) -> None:
+async def update_lastfm_now_playing(current_song: Track) -> bool:
     try:
         network.update_now_playing(
             artist=current_song.artist,
@@ -174,8 +174,10 @@ async def update_lastfm_now_playing(current_song: Track) -> None:
             album=current_song.album
         )
         logger.info("Updated Last.fm now playing")
+        return True
     except pylast.WSError as e:
         logger.error(f"Failed to update Last.fm now playing: {e}")
+        return False
 
 
 async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> LastFmTrack | None:

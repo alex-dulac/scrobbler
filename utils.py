@@ -16,26 +16,36 @@ SCROBBLING_NOT_ENABLED = "Scrobbling is not enabled."
 class Comparison:
     def __init__(
             self,
+            no_song_playing: bool = False,
             update_song: bool = False,
             update_song_playing_status: bool = False,
             update_lastfm_now_playing: bool = False,
             update_lastfm_album: bool = False
     ) -> None:
+        self.no_song_playing = no_song_playing
         self.update_song = update_song
         self.update_song_playing_status = update_song_playing_status
         self.update_lastfm_now_playing = update_lastfm_now_playing
         self.update_lastfm_album = update_lastfm_album
 
 
+def song_has_changed(poll: Track | None, current_song: Track | None) -> bool:
+    return poll and (not current_song or poll.name != current_song.name)
+
+
+def is_same_song(poll: Track | None, current_song: Track | None) -> bool:
+    return current_song and poll and current_song.name == poll.name
+
+
 async def poll_comparison(
-        poll: Track,
+        poll: Track | None,
         current_song: Track | None,
         lastfm_album: LastFmAlbum | None
 ) -> Comparison:
-    update_song = (
-        poll and
-        (current_song is None or poll.name != current_song.name)
-    )
+    if not poll:
+        return Comparison(no_song_playing=True)
+
+    update_song = song_has_changed(poll, current_song)
 
     update_song_playing_status = (
         poll and
@@ -82,29 +92,6 @@ async def validate_scrobble_in_state(state: AppState) -> bool:
     return True
 
 
-async def validate_scrobble_in_loop(
-        current_song: AppleMusicTrack | None,
-        previous_song: AppleMusicTrack | None
-) -> bool:
-    if not current_song:
-        logger.info(NO_SONG)
-        return False
-
-    if not current_song.playing:
-        logger.info(NOT_PLAYING)
-        return False
-
-    if current_song.scrobbled:
-        logger.info(ALREADY_SCROBBLED)
-        return False
-
-    if previous_song and previous_song.id == current_song.id:
-        logger.info("This might not happen but if it does I want to see it.")
-        return False
-
-    return True
-
-
 async def clean_up_title(title: str) -> str:
     """
     Clean up the album or song title to get the actual name.
@@ -118,8 +105,10 @@ async def clean_up_title(title: str) -> str:
         str: The cleaned up title.
     """
 
-    # Remove substrings in parentheses or brackets containing 'remastered' or 'bonus' (case-insensitive)
+    # Remove substrings in parentheses or brackets containing undesired detail (case-insensitive)...
     clean_title = re.sub(r'[\(\[][^)\]]*remastered[^)\]]*[\)\]]', '', title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*bonus[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'[\(\[][^)\]]*extended[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'[\(\[][^)\]]*anniversary[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
 
     return clean_title

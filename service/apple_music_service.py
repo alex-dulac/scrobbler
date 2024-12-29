@@ -43,6 +43,7 @@ async def poll_apple_music() -> AppleMusicTrack | None:
             return None
     except applescript.ScriptError as e:
         await handle_applescript_error(e)
+        return None
 
 
 async def get_current_track_artwork_data() -> str | None:

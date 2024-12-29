@@ -9,7 +9,7 @@ from models.integrations import Integration
 from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import scrobble_to_lastfm, update_lastfm_now_playing
-from utils import poll_comparison, validate_scrobble_in_loop
+from utils import poll_comparison, song_has_changed, is_same_song, Comparison
 
 bar = "=" * 110
 loop = True
@@ -19,6 +19,10 @@ session_scrobbles: [LastFmTrack] = []
 
 def new_line() -> None:
     print("\n")
+
+def clear_line() -> None:
+    sys.stdout.write("\r" + " " * 110 + "\r")
+    sys.stdout.flush()
 
 def spacer() -> None:
     print(bar)
@@ -65,35 +69,31 @@ def handle_arguments() -> None:
 
 
 def signal_handler(signal, frame) -> None:
-    sys.stdout.write("\r" + " " * 110 + "\r")  # Clear the line
-    sys.stdout.flush()
+    clear_line()
     asyncio.create_task(stop())
 
 
 async def run() -> None:
+    scrobble_count = 0
     current_song = None
-    previous_song = None
 
     if active_integration == Integration.APPLE_MUSIC:
         current_song: AppleMusicTrack | None
-        previous_song: AppleMusicTrack | None
     elif active_integration == Integration.SPOTIFY:
         current_song: SpotifyTrack | None
-        previous_song: SpotifyTrack | None
-
-    scrobble_count = 0
 
     while loop:
         logger.info(f"Scrobble Count: {scrobble_count}")
 
         poll = await poll_apple_music()
-        if poll:
-            logger.info(f"Apple Music current song: '{poll.name}' by {poll.artist}")
-            logger.info(f"Playing" if poll.playing else "Paused")
-        else:
-            logger.info("No song is currently playing.")
+        compare: Comparison = await poll_comparison(poll, current_song, None)
 
-        compare = await poll_comparison(poll, current_song, None)
+        if compare.no_song_playing:
+            logger.info("No song is currently playing.")
+        else:
+            logger.info(f"Apple Music current song: '{poll.name}' by {poll.artist}")
+            logger.info("Playing" if poll.playing else "Paused")
+            logger.info("Scrobbled" if current_song and current_song.scrobbled else f"Scrobble threshold: {poll.get_scrobbled_threshold()}")
 
         if compare.update_song:
             current_song = poll
@@ -103,51 +103,43 @@ async def run() -> None:
             current_song.playing = poll.playing
 
         if compare.update_lastfm_now_playing:
-            await update_lastfm_now_playing(current_song)
-            current_song.lastfm_updated_now_playing = True
+            current_song.lastfm_updated_now_playing = await update_lastfm_now_playing(current_song)
 
         spacer()
 
-        # Poll every second for 30 seconds, break for certain conditions
         for _ in range(30):
             if not loop:
                 break
 
             new_poll = await poll_apple_music()
+            if not new_poll:
+                print(f" No song is currently playing...", end="\r")
+                await asyncio.sleep(1)
+                continue
 
-            # Check if the song has changed
-            if new_poll and (not current_song or new_poll.id != current_song.id):
-                logger.info(f"Song changed to: '{new_poll.name}' by {new_poll.artist}")
-                current_song = new_poll
-                current_song.time_played = 0
+            if song_has_changed(new_poll, current_song):
                 break
 
-            # Break the loop if the song changes from playing to not playing, or vice versa
-            playing_started = not current_song.playing and new_poll.playing
-            playing_stopped = current_song.playing and not new_poll.playing
-            if current_song and new_poll and current_song.id == new_poll.id and (playing_stopped or playing_started):
-                logger.info(f"Song '{current_song.name}' changed from playing to paused")
-                break
+            if is_same_song(poll, current_song):
+                playing_started = not current_song.playing and new_poll.playing
+                playing_stopped = current_song.playing and not new_poll.playing
+                if playing_started or playing_stopped:
+                    break
 
             if current_song and current_song.playing and not current_song.scrobbled:
-                scrobble_threshold = min(current_song.duration / 2, 120)  # Half duration or 2 minutes, whichever is less
                 current_song.time_played += 1
-                print(f"Song: {current_song.name} | Time played: {current_song.time_played}s", end="\r")
+                print(f" Song: {current_song.name} | Time played: {current_song.time_played}s", end="\r")
 
-                if current_song.time_played >= scrobble_threshold:
-                    logger.info(f"Scrobble threshold reached for '{current_song.name}'")
-                    if await validate_scrobble_in_loop(current_song, previous_song):
-                        scrobbled_track = await scrobble_to_lastfm(current_song)
-                        session_scrobbles.append(scrobbled_track)
-                        current_song.scrobbled = True
-                        previous_song = current_song
-                        scrobble_count += 1
+                if current_song.is_ready_to_be_scrobbled():
+                    scrobbled_track = await scrobble_to_lastfm(current_song)
+                    session_scrobbles.append(scrobbled_track)
+                    current_song.scrobbled = True
+                    scrobble_count += 1
                     break
 
             await asyncio.sleep(1)
 
-        sys.stdout.write("\r" + " " * 110 + "\r")  # Clear the line
-        sys.stdout.flush()
+        clear_line()
 
 
 if __name__ == "__main__":

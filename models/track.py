@@ -65,6 +65,12 @@ class AppleMusicTrack(Track):
             if attr_name:
                 setattr(self, attr_name, value)
 
+    def get_scrobbled_threshold(self) -> int:
+        return min(round(self.duration / 2), 120)
+
+    def is_ready_to_be_scrobbled(self) -> bool:
+        return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
+
 
 class LastFmTrack(Track):
     def __init__(
