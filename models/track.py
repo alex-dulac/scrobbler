@@ -66,7 +66,7 @@ class AppleMusicTrack(Track):
                 setattr(self, attr_name, value)
 
     def get_scrobbled_threshold(self) -> int:
-        return min(round(self.duration / 2), 120)
+        return min(round(self.duration / 2), 120) if self.duration else 120
 
     def is_ready_to_be_scrobbled(self) -> bool:
         return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()

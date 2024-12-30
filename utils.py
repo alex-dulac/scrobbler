@@ -17,12 +17,14 @@ class Comparison:
     def __init__(
             self,
             no_song_playing: bool = False,
+            is_same_song: bool = False,
             update_song: bool = False,
             update_song_playing_status: bool = False,
             update_lastfm_now_playing: bool = False,
             update_lastfm_album: bool = False
     ) -> None:
         self.no_song_playing = no_song_playing
+        self.is_same_song = is_same_song
         self.update_song = update_song
         self.update_song_playing_status = update_song_playing_status
         self.update_lastfm_now_playing = update_lastfm_now_playing
@@ -44,6 +46,9 @@ async def poll_comparison(
 ) -> Comparison:
     if not poll:
         return Comparison(no_song_playing=True)
+
+    if is_same_song(poll, current_song):
+        return Comparison(is_same_song=True)
 
     update_song = song_has_changed(poll, current_song)
 

@@ -8,6 +8,7 @@ from models.user import LastFmUser
 
 class AppState:
     def __init__(self):
+        self.artist_image: str | None = None
         self.current_song: AppleMusicTrack | SpotifyTrack | None = None
         self.lastfm_album: LastFmAlbum | None = None
         self.lastfm_artist_image_url: str | None = None
