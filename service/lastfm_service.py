@@ -299,3 +299,34 @@ async def user_weekly_album_charts(from_date: str, to_date: str):
         results.append(last_fm_album)
 
     return results
+
+
+async def get_user_30_day_stats():
+    user = await get_user()
+
+    thirty_days_ago = int((datetime.now() - timedelta(days=30)).timestamp())
+    now = int(datetime.now().timestamp())
+
+    recent_tracks = user.get_recent_tracks(limit=None, time_from=thirty_days_ago, time_to=now)
+    daily_stats = defaultdict(lambda: {"tracks": set(), "artists": set(), "albums": set()})
+
+    for track in recent_tracks:
+        date = datetime.fromtimestamp(int(track.timestamp)).strftime('%Y-%m-%d')
+        track_identifier = (track.track.artist.name, track.track.title)
+        artist_identifier = track.track.artist.name
+        album_identifier = (track.track.artist.name, track.album)
+
+        daily_stats[date]["tracks"].add(track_identifier)
+        daily_stats[date]["artists"].add(artist_identifier)
+        daily_stats[date]["albums"].add(album_identifier)
+
+    daily_counts = {
+        date: {
+            "track_count": len(stats["tracks"]),
+            "artist_count": len(stats["artists"]),
+            "album_count": len(stats["albums"]),
+        }
+        for date, stats in daily_stats.items()
+    }
+
+    return daily_counts

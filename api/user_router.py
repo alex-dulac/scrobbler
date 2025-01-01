@@ -13,7 +13,7 @@ from service.lastfm_service import (
     current_track_user_scrobbles,
     user_weekly_album_charts,
     get_lastfm_account_details,
-    user_weekly_chart_dates
+    user_weekly_chart_dates, get_user_30_day_stats
 )
 from service.spotify_service import get_spotify_account_information
 
@@ -97,3 +97,8 @@ async def get_weekly_chart_dates():
     results = await user_weekly_chart_dates()
 
     return {"data": results}
+
+
+@user_router.get("/user/30-day-stats/")
+async def overview_stats():
+    return {"data": await get_user_30_day_stats()}
