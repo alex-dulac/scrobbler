@@ -1,7 +1,7 @@
 from typing import List
 
+from models.album import LastFmAlbum
 from models.integrations import Integration
-from models.lastfm_models import LastFmAlbum
 from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
 from models.user import LastFmUser
 

@@ -8,6 +8,8 @@ class Track:
             time_played: int = 0,
             scrobbled: bool = False,
             lastfm_updated_now_playing: bool = False,
+            clean_name: str = None,
+            clean_album: str = None
     ):
         self.name = name
         self.artist = artist
@@ -16,6 +18,8 @@ class Track:
         self.time_played = time_played
         self.scrobbled = scrobbled
         self.lastfm_updated_now_playing = lastfm_updated_now_playing
+        self.clean_name = clean_name
+        self.clean_album = clean_album
 
 
 class AppleMusicTrack(Track):
@@ -70,6 +74,9 @@ class AppleMusicTrack(Track):
 
     def is_ready_to_be_scrobbled(self) -> bool:
         return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
+
+    def has_clean_name(self) -> bool:
+        return self.name != self.clean_name
 
 
 class LastFmTrack(Track):

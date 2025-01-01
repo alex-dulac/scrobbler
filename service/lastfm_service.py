@@ -1,5 +1,6 @@
 import time
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 import pylast
 import requests
@@ -95,7 +96,7 @@ async def get_user_recent_tracks() -> list[list[LastFmTrack | LastFmAlbum | None
             name=track.track.title,
             artist=artist_name,
             album=album_name,
-            scrobbled_at=scrobbled_at.strftime('%Y-%m-%d %H:%M:%S')
+            scrobbled_at=scrobbled_at.strftime(settings.DATETIME_FORMAT)
         )
         a = await get_lastfm_album(album_name, artist_name)
 
@@ -114,7 +115,7 @@ async def get_user_loved_tracks() -> list[LastFmTrack]:
         t = LastFmTrack(
             name=track.track.title,
             artist=track.track.artist.name,
-            loved_at=loved_at.strftime('%Y-%m-%d %H:%M:%S')
+            loved_at=loved_at.strftime(settings.DATETIME_FORMAT)
         )
         tracks.append(t)
 
@@ -170,8 +171,8 @@ async def update_lastfm_now_playing(current_song: Track) -> bool:
     try:
         network.update_now_playing(
             artist=current_song.artist,
-            title=current_song.name,
-            album=current_song.album
+            title=current_song.clean_name,
+            album=current_song.clean_album
         )
         logger.info("Updated Last.fm now playing")
         return True
@@ -180,32 +181,26 @@ async def update_lastfm_now_playing(current_song: Track) -> bool:
         return False
 
 
-async def scrobble_to_lastfm(current_song: Track, clean: bool = True) -> LastFmTrack | None:
+async def scrobble_to_lastfm(current_song: Track) -> LastFmTrack | None:
     artist = current_song.artist
-    track = current_song.name
-    album = current_song.album
+    track = current_song.clean_name
+    album = current_song.clean_album
     timestamp = int(time.time())
-
-    clean_track = None
-    clean_album = None
-    if clean:
-        clean_track = await clean_up_title(track)
-        clean_album = await clean_up_title(album)
 
     if artist and track and album:
         try:
             network.scrobble(
                 artist=artist,
-                title=clean_track if clean_track else track,
+                title=track,
                 timestamp=timestamp,
-                album=clean_album if clean_album else album
+                album=album
             )
-            logger.info(f"Scrobbled to LastFm: '{artist}' - {clean_track if clean_track else track}")
+            logger.info(f"Scrobbled to LastFm: {artist} - '{track}'")
             return LastFmTrack(
-                name=clean_track if clean_track else track,
+                name=track,
                 artist=artist,
-                album=clean_album if clean_album else album,
-                scrobbled_at=datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                album=album,
+                scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
             )
 
         except pylast.WSError as e:
@@ -235,7 +230,7 @@ async def get_album_image_url(album: pylast.Album) -> str | None:
         logger.error(f"Failed to get album image_url: {e}")
 
     if image_url is None:
-        clean_title = await clean_up_title(album.title)
+        clean_title = clean_up_title(album.title)
         clean_album = network.get_album(title=clean_title, artist=album.artist.name)
         try:
             image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
@@ -264,15 +259,16 @@ async def get_lastfm_album(title: str, artist: str) -> LastFmAlbum | None:
 async def current_track_user_scrobbles(current_song: AppleMusicTrack) -> list[LastFmTrack]:
     user = await get_user()
 
-    # TODO implement multiple fetches if the title is not clean
-    # example: if listening to "Cool Song (Remastered 2021)",
-    # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc.
+    # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
     track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
+    if current_song.has_clean_name():
+        clean_track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.clean_name)
+        track_scrobbles.extend(clean_track_scrobbles)
 
     tracks = []
     for t in track_scrobbles:
         timestamp = int(t.timestamp)
-        timestamp = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        timestamp = datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
         track = LastFmTrack(
             name=t.track.title,
             artist=t.track.artist.name,

@@ -5,6 +5,7 @@ from loguru import logger
 
 from models.mac_os import MacOSSystemInfo
 from models.track import AppleMusicTrack
+from utils import clean_up_title
 
 """
 Apple Music related methods
@@ -38,7 +39,11 @@ async def poll_apple_music() -> AppleMusicTrack | None:
         playing = result[1]
 
         if track != applescript.AEType(applescript.kae.cMissingValue):
-            return AppleMusicTrack(track_info=track, playing=playing)
+            apple_music_track = AppleMusicTrack(track, playing)
+            apple_music_track.clean_name = clean_up_title(apple_music_track.name)
+            apple_music_track.clean_album = clean_up_title(apple_music_track.album)
+
+            return apple_music_track
         else:
             return None
     except applescript.ScriptError as e:
