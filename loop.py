@@ -8,12 +8,13 @@ from loguru import logger
 from models.integrations import Integration
 from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
 from service.apple_music_service import poll_apple_music
-from service.lastfm_service import scrobble_to_lastfm, update_lastfm_now_playing
+from service.lastfm_service import LastFmService
 from utils import poll_comparison, song_has_changed, is_same_song, Comparison
 
 bar = "=" * 110
 loop = True
 active_integration = Integration.APPLE_MUSIC
+lastfm = LastFmService()
 scrobble_count = 0
 session_scrobbles: [LastFmTrack] = []
 
@@ -111,7 +112,7 @@ async def monitor_song_playback(current_song) -> None:
             print(f" Song: {current_song.name} | Time played: {current_song.time_played}s", end="\r")
 
             if current_song.is_ready_to_be_scrobbled():
-                scrobbled_track = await scrobble_to_lastfm(current_song)
+                scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
                 session_scrobbles.append(scrobbled_track)
                 current_song.scrobbled = True
                 scrobble_count += 1
@@ -140,8 +141,6 @@ async def run() -> None:
         poll = await poll_apple_music()
         compare: Comparison = await poll_comparison(poll, current_song, None)
 
-        log_current_song_status(compare, poll, current_song)
-
         if compare.update_song:
             current_song = poll
             current_song.time_played = 0
@@ -150,7 +149,9 @@ async def run() -> None:
             current_song.playing = poll.playing
 
         if compare.update_lastfm_now_playing:
-            current_song.lastfm_updated_now_playing = await update_lastfm_now_playing(current_song)
+            current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
+
+        log_current_song_status(compare, poll, current_song)
 
         spacer()
 

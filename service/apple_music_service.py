@@ -1,6 +1,6 @@
 import base64
 
-import applescript
+from applescript import AppleScript, AEType, kae, ScriptError
 from loguru import logger
 
 from models.mac_os import MacOSSystemInfo
@@ -12,7 +12,7 @@ Apple Music related methods
 """
 
 
-async def handle_applescript_error(e: applescript.ScriptError) -> None:
+async def handle_applescript_error(e: ScriptError) -> None:
     if e.number == -1728:
         logger.info("Apple Music is open but no song is selected.")
         return None
@@ -34,11 +34,14 @@ async def poll_apple_music() -> AppleMusicTrack | None:
     end tell
     """
     try:
-        result = applescript.AppleScript(script).run()
+        result = AppleScript(script).run()
         track = result[0]
         playing = result[1]
 
-        if track != applescript.AEType(applescript.kae.cMissingValue):
+        track_exists = isinstance(track, dict) and track != AEType(kae.cMissingValue)
+        skip = track_exists and (track.get(AEType(kae.keyAEName)) == 'Connecting…' or not track.get(AEType(b'pArt')))
+
+        if track_exists and not skip:
             apple_music_track = AppleMusicTrack(track, playing)
             apple_music_track.clean_name = clean_up_title(apple_music_track.name)
             apple_music_track.clean_album = clean_up_title(apple_music_track.album)
@@ -46,7 +49,7 @@ async def poll_apple_music() -> AppleMusicTrack | None:
             return apple_music_track
         else:
             return None
-    except applescript.ScriptError as e:
+    except ScriptError as e:
         await handle_applescript_error(e)
         return None
 
@@ -65,7 +68,7 @@ async def get_current_track_artwork_data() -> str | None:
     end tell
     """
     try:
-        result = applescript.AppleScript(script).run()
+        result = AppleScript(script).run()
         artwork_data = result[0]
 
         if artwork_data:
@@ -97,7 +100,7 @@ async def get_macos_information() -> MacOSSystemInfo | None:
     """
 
     try:
-        result = applescript.AppleScript(script).run()
+        result = AppleScript(script).run()
 
         return MacOSSystemInfo(
             user_name=result[0],
@@ -110,7 +113,7 @@ async def get_macos_information() -> MacOSSystemInfo | None:
             physical_memory=result[7],
             user_locale=result[8]
         )
-    except applescript.ScriptError as e:
+    except ScriptError as e:
         await handle_applescript_error(e)
 
 

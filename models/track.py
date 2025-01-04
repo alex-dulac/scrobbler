@@ -21,6 +21,9 @@ class Track:
         self.clean_name = clean_name
         self.clean_album = clean_album
 
+    def has_clean_name(self) -> bool:
+        return self.name != self.clean_name
+
 
 class AppleMusicTrack(Track):
     def __init__(self, track_info, playing):
@@ -74,9 +77,6 @@ class AppleMusicTrack(Track):
 
     def is_ready_to_be_scrobbled(self) -> bool:
         return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
-
-    def has_clean_name(self) -> bool:
-        return self.name != self.clean_name
 
 
 class LastFmTrack(Track):
