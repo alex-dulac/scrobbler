@@ -91,51 +91,40 @@ async def monitor_song_playback(current_song) -> None:
     global scrobble_count
 
     while True:
-        if not loop:
-            break
-
         new_poll = await poll_apple_music()
         if not new_poll:
-            print(f" No song is currently playing...", end="\r")
+            print(" No song is currently playing...", end="\r")
             await asyncio.sleep(1)
             continue
 
         if song_has_changed(new_poll, current_song):
             break
 
-        if current_song:
-            # can assume that current song and poll are the same song
-            # can these nested if's be optimized?
+        if not current_song:
+            await asyncio.sleep(1)
+            continue
 
-            if current_song.scrobbled:
-                print(f" Song: {current_song.clean_name} | Scrobbled", end="\r")
-                await asyncio.sleep(1)
-                continue
+        # Update playing status
+        if current_song.playing != new_poll.playing:
+            current_song.playing = new_poll.playing
 
-            if current_song.playing and not current_song.scrobbled:
-                if not new_poll.playing:
-                    current_song.playing = new_poll.playing
-                    print(f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s | Paused", end="\r")
+        # Prepare status message
+        if current_song.scrobbled:
+            status = f" Song: {current_song.clean_name} | Scrobbled"
+        elif current_song.playing:
+            current_song.time_played += 1
+            status = f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s"
+            if current_song.is_ready_to_be_scrobbled():
+                scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
+                session_scrobbles.append(scrobbled_track)
+                current_song.scrobbled = True
+                scrobble_count += 1
+                status = f" Song: {current_song.clean_name} | Scrobbled"
+        else:
+            status = f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s | Paused"
 
-                current_song.time_played += 1
-                print(f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s", end="\r")
-
-                if current_song.is_ready_to_be_scrobbled():
-                    scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
-                    session_scrobbles.append(scrobbled_track)
-                    current_song.scrobbled = True
-                    scrobble_count += 1
-                    continue
-
-            elif not new_poll.playing:
-                current_song.playing = new_poll.playing
-                print(f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s | Paused", end="\r")
-
-            elif new_poll.playing:
-                current_song.playing = new_poll.playing
-                clear_line()
-                print(f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s", end="\r")
-
+        clear_line()
+        print(status, end="\r")
         await asyncio.sleep(1)
 
 
