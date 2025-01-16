@@ -8,7 +8,7 @@ from api.state import get_app_state
 from api.user_router import user_router
 from config.security import verify_token
 from service.apple_music_service import poll_apple_music, get_current_track_artwork_data
-from service.lastfm_service import update_lastfm_now_playing, get_lastfm_album, get_lastfm_account_details
+from service.lastfm_service import get_lastfm_account_details, LastFmService
 from utils import poll_comparison
 from service.spotify_service import poll_spotify, get_artist_from_name
 
@@ -21,6 +21,8 @@ router.include_router(data_router)
 router.include_router(scrobble_router)
 router.include_router(spotify_router)
 router.include_router(user_router)
+
+lasfm = LastFmService()
 
 
 @router.get("/poll-song/")
@@ -58,10 +60,10 @@ async def get_current_song():
         logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
 
     if compare.update_lastfm_now_playing:
-        app_state.current_song.lastfm_updated_now_playing = await update_lastfm_now_playing(app_state.current_song)
+        app_state.current_song.lastfm_updated_now_playing = await lasfm.update_lastfm_now_playing(app_state.current_song)
 
     if compare.update_lastfm_album:
-        app_state.lastfm_album = await get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
+        app_state.lastfm_album = await lasfm.get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
 
     data = {
         "current_song": app_state.current_song,

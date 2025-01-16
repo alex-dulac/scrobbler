@@ -111,7 +111,7 @@ def clean_up_title(title: str) -> str:
     """
 
     # Remove substrings in parentheses or brackets containing undesired detail (case-insensitive)...
-    clean_title = re.sub(r'[\(\[][^)\]]*remastered[^)\]]*[\)\]]', '', title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'[\(\[][^)\]]*remaster[^)\]]*[\)\]]', '', title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*bonus[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*extended[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*anniversary[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
