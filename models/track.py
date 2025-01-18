@@ -24,6 +24,9 @@ class Track:
     def has_clean_name(self) -> bool:
         return self.name != self.clean_name
 
+    def display_name(self) -> str:
+        return f"`{self.clean_name}` by {self.artist} from `{self.clean_album}`"
+
 
 class AppleMusicTrack(Track):
     def __init__(self, track_info, playing):

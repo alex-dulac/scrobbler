@@ -195,7 +195,7 @@ class LastFmService:
                     timestamp=timestamp,
                     album=album
                 )
-                logger.info(f"Scrobbled to LastFm: {artist} - '{track}'")
+                logger.info(f"Scrobbled to LastFm: {current_song.display_name()}")
                 return LastFmTrack(
                     name=track,
                     artist=artist,

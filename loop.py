@@ -83,14 +83,20 @@ def log_current_song_status(compare: Comparison, current_song) -> None:
     if compare.no_song_playing:
         return logger.info("No song is currently playing.")
 
-    logger.info(f"Current song: '{current_song.clean_name}' by {current_song.artist} from '{current_song.clean_album}'")
+    logger.info(f"Current song: '{current_song.display_name()}'")
     logger.info("Scrobbled" if current_song and current_song.scrobbled else f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
 
 
 async def monitor_song_playback(current_song) -> None:
+    """
+    Monitors the current playing song, updates its status,
+    and handles scrobbling to Last.fm when appropriate.
+    It provides real-time updates on the console about the current song's status.
+
+    """
     global scrobble_count
 
-    while True:
+    while loop:
         new_poll = await poll_apple_music()
         if not new_poll:
             print(" No song is currently playing...", end="\r")
@@ -104,24 +110,22 @@ async def monitor_song_playback(current_song) -> None:
             await asyncio.sleep(1)
             continue
 
-        # Update playing status
         if current_song.playing != new_poll.playing:
             current_song.playing = new_poll.playing
 
-        # Prepare status message
         if current_song.scrobbled:
-            status = f" Song: {current_song.clean_name} | Scrobbled"
+            status = f" Song: {current_song.display_name()} | Scrobbled"
         elif current_song.playing:
             current_song.time_played += 1
-            status = f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s"
+            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
             if current_song.is_ready_to_be_scrobbled():
                 scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
                 session_scrobbles.append(scrobbled_track)
                 current_song.scrobbled = True
                 scrobble_count += 1
-                status = f" Song: {current_song.clean_name} | Scrobbled"
+                status = f" Song: {current_song.display_name()} | Scrobbled"
         else:
-            status = f" Song: {current_song.clean_name} | Time played: {current_song.time_played}s | Paused"
+            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
 
         clear_line()
         print(status, end="\r")
@@ -129,6 +133,11 @@ async def monitor_song_playback(current_song) -> None:
 
 
 async def run() -> None:
+    """
+    Creates a continuous loop that polls for the current playing song, updates its status,
+    manages Last.fm integration, and monitors playback.
+    It's designed to keep track of what's playing and handle scrobbling to Last.fm when appropriate.
+    """
     current_song = None
 
     if active_integration == Integration.APPLE_MUSIC:
@@ -147,10 +156,10 @@ async def run() -> None:
         if compare.update_song_playing_status:
             current_song.playing = poll.playing
 
+        log_current_song_status(compare, current_song)
+
         if compare.update_lastfm_now_playing:
             current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
-
-        log_current_song_status(compare, current_song)
 
         spacer()
 
