@@ -71,20 +71,25 @@ def handle_arguments() -> None:
             case _:
                 raise ValueError(f"Invalid integration: {args.integration.upper()}")
 
+    logger.info(f"Active Integration: {active_integration.name}")
+
 
 def signal_handler(signal, frame) -> None:
     clear_line()
     asyncio.create_task(stop())
 
 
-def log_current_song_status(compare: Comparison, current_song) -> None:
+async def log_current_song(compare: Comparison, current_song) -> None:
     logger.info(f"Scrobble Count: {scrobble_count}")
 
     if compare.no_song_playing:
         return logger.info("No song is currently playing.")
 
     logger.info(f"Current song: '{current_song.display_name()}'")
-    logger.info("Scrobbled" if current_song and current_song.scrobbled else f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
+    logger.info("Scrobbled" if current_song.scrobbled else f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
+
+    scrobbles = await lastfm.current_track_user_scrobbles(current_song)
+    logger.info(f"Count of scrobbles for current track: {len(scrobbles)}")
 
 
 async def monitor_song_playback(current_song) -> None:
@@ -92,7 +97,6 @@ async def monitor_song_playback(current_song) -> None:
     Monitors the current playing song, updates its status,
     and handles scrobbling to Last.fm when appropriate.
     It provides real-time updates on the console about the current song's status.
-
     """
     global scrobble_count
 
@@ -156,7 +160,7 @@ async def run() -> None:
         if compare.update_song_playing_status:
             current_song.playing = poll.playing
 
-        log_current_song_status(compare, current_song)
+        await log_current_song(compare, current_song)
 
         if compare.update_lastfm_now_playing:
             current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)

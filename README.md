@@ -51,10 +51,10 @@ py-scrobbler is a tool for tracking and logging your music listening activity fr
 
 The `.env` file should contain the environment variables found in `.env.example`.
 
-### Running the Application
+### Running the FastAPI Application
 
 1. **Start the FastAPI server:**
-2. ```sh
+   ```sh
     python app.py
     ```
    or
@@ -62,10 +62,28 @@ The `.env` file should contain the environment variables found in `.env.example`
     uvicorn app:app --reload
     ```
 
-2. **Run the loop script:**
+### Running the Python Script App
+1. **Run the loop script:**
     ```sh
     python loop.py
     ```
+   ```
+   2025-01-18 10:29:02.425 | INFO     | __main__:handle_arguments:74 - Active Integration: APPLE_MUSIC
+   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:83 - Scrobble Count: 0
+   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:88 - Current song: '`Women` by Def Leppard from `Hysteria`'
+   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:89 - Scrobble threshold: 120
+   2025-01-18 10:29:03.998 | INFO     | __main__:log_current_song:92 - Count of scrobbles for current track: 80
+   2025-01-18 10:29:04.168 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
+   ==============================================================================================================
+   2025-01-18 10:31:09.242 | INFO     | service.lastfm_service:scrobble_to_lastfm:198 - Scrobbled to LastFm: `Women` by Def Leppard from `Hysteria`
+   2025-01-18 10:31:21.622 | INFO     | __main__:log_current_song:83 - Scrobble Count: 1                         
+   2025-01-18 10:31:21.623 | INFO     | __main__:log_current_song:88 - Current song: '`Rocket` by Def Leppard from `Hysteria`'
+   2025-01-18 10:31:21.623 | INFO     | __main__:log_current_song:89 - Scrobble threshold: 120
+   2025-01-18 10:31:22.975 | INFO     | __main__:log_current_song:92 - Count of scrobbles for current track: 76
+   2025-01-18 10:31:23.123 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
+   ==============================================================================================================
+   Song: `Rocket` by Def Leppard from `Hysteria` | Time played: 105s
+   ```
 
 ### Key Files
 
