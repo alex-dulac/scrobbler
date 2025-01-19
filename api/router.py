@@ -10,7 +10,7 @@ from config.security import verify_token
 from service.apple_music_service import poll_apple_music, get_current_track_artwork_data
 from service.lastfm_service import get_lastfm_account_details, LastFmService
 from utils import poll_comparison
-from service.spotify_service import poll_spotify, get_artist_from_name
+from service.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),
@@ -23,6 +23,7 @@ router.include_router(spotify_router)
 router.include_router(user_router)
 
 lasfm = LastFmService()
+spotify = SpotifyService()
 
 
 @router.get("/poll-song/")
@@ -34,7 +35,7 @@ async def get_current_song():
         case active_integration.APPLE_MUSIC:
             poll = await poll_apple_music()
         case active_integration.SPOTIFY:
-            poll = await poll_spotify()
+            poll = await spotify.poll_spotify()
         case _:
             raise ValueError("Invalid active integration")
 
@@ -51,7 +52,7 @@ async def get_current_song():
 
     if compare.update_song:
         app_state.current_song = poll
-        spotify_artist = await get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None
+        spotify_artist = await spotify.get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None
         app_state.artist_image = spotify_artist.image_url[0] if spotify_artist else None
         logger.info(f"Updated current song: {poll.name}")
 
