@@ -4,7 +4,7 @@ from loguru import logger
 
 from api.state import AppState
 from models.lastfm_models import LastFmAlbum
-from models.track import AppleMusicTrack, Track
+from models.track import Track
 
 ALREADY_SCROBBLED = "This song has already been scrobbled."
 KEEP_LISTENING = "Keep listening!"
@@ -36,7 +36,10 @@ def song_has_changed(poll: Track | None, current_song: Track | None) -> bool:
 
 
 def is_same_song(poll: Track | None, current_song: Track | None) -> bool:
-    return current_song and poll and current_song.name == poll.name
+    return (current_song
+            and poll
+            and current_song.name == poll.name
+            and poll.artist == current_song.artist)
 
 
 async def poll_comparison(
@@ -48,16 +51,10 @@ async def poll_comparison(
         return Comparison(no_song_playing=True)
 
     if is_same_song(poll, current_song):
-        return Comparison(is_same_song=True)
+        update_song_playing_status = poll.playing != current_song.playing
+        return Comparison(is_same_song=True, update_song_playing_status=update_song_playing_status)
 
     update_song = song_has_changed(poll, current_song)
-
-    update_song_playing_status = (
-        poll and
-        current_song and
-        (poll.name, poll.artist == current_song.name, current_song.artist) and
-        (poll.playing != current_song.playing)
-    )
 
     update_lastfm_now_playing = (
         update_song or
@@ -71,7 +68,6 @@ async def poll_comparison(
 
     return Comparison(
         update_song=update_song,
-        update_song_playing_status=update_song_playing_status,
         update_lastfm_now_playing=update_lastfm_now_playing,
         update_lastfm_album=update_lastfm_album,
     )

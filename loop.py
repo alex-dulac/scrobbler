@@ -10,7 +10,7 @@ from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import LastFmService
 from service.spotify_service import SpotifyService
-from utils import poll_comparison, song_has_changed, Comparison
+from utils import poll_comparison, Comparison
 
 bar = "=" * 110
 loop = True
@@ -94,59 +94,13 @@ async def log_current_song(compare: Comparison, current_song) -> None:
     logger.info(f"Count of scrobbles for current track: {len(scrobbles)}")
 
 
-async def monitor_song_playback(current_song, poll_service) -> None:
-    """
-    Monitors the current playing song, updates its status,
-    and handles scrobbling to Last.fm when appropriate.
-    It provides real-time updates on the console about the current song's status.
-    """
-    global scrobble_count
-
-    while loop:
-        new_poll = await poll_service()
-        if not new_poll:
-            print(" No song is currently playing...", end="\r")
-            await asyncio.sleep(1)
-            continue
-
-        if song_has_changed(new_poll, current_song):
-            break
-
-        if not current_song:
-            await asyncio.sleep(1)
-            continue
-
-        if current_song.playing != new_poll.playing:
-            current_song.playing = new_poll.playing
-
-        if current_song.scrobbled:
-            status = f" Song: {current_song.display_name()} | Scrobbled"
-
-        elif current_song.playing:
-            current_song.time_played += 1
-            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
-
-            if current_song.is_ready_to_be_scrobbled():
-                scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
-                session_scrobbles.append(scrobbled_track)
-                current_song.scrobbled = True
-                scrobble_count += 1
-                status = f" Song: {current_song.display_name()} | Scrobbled"
-
-        else:
-            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
-
-        clear_line()
-        print(status, end="\r")
-        await asyncio.sleep(1)
-
-
 async def run() -> None:
     """
     Creates a continuous loop that polls for the current playing song, updates its status,
     manages Last.fm integration, and monitors playback.
     It's designed to keep track of what's playing and handle scrobbling to Last.fm when appropriate.
     """
+    global scrobble_count
     current_song = None
     poll_service = None
 
@@ -161,23 +115,40 @@ async def run() -> None:
         poll = await poll_service()
         compare = await poll_comparison(poll, current_song, None)
 
+        if compare.no_song_playing:
+            print(" No song is currently playing...", end="\r")
+            await asyncio.sleep(1)
+            continue
+
         if compare.update_song:
             current_song = poll
             current_song.time_played = 0
+            await log_current_song(compare, current_song)
+            if compare.update_lastfm_now_playing:
+                current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
+            continue
 
         if compare.update_song_playing_status:
             current_song.playing = poll.playing
 
-        await log_current_song(compare, current_song)
-
-        if compare.update_lastfm_now_playing:
-            current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
-
-        spacer()
-
-        await monitor_song_playback(current_song, poll_service)
+        if current_song.scrobbled:
+            status = f" Song: {current_song.display_name()} | Scrobbled"
+        elif current_song.playing:
+            current_song.time_played += 1
+            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
+            if current_song.is_ready_to_be_scrobbled():
+                scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
+                session_scrobbles.append(scrobbled_track)
+                current_song.scrobbled = True
+                scrobble_count += 1
+                status = f" Song: {current_song.display_name()} | Scrobbled"
+        else:
+            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
 
         clear_line()
+        print(status, end="\r")
+        await asyncio.sleep(1)
+
 
 
 if __name__ == "__main__":
