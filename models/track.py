@@ -6,6 +6,7 @@ class Track:
             album: str = None,
             playing: bool = False,
             time_played: int = 0,
+            duration: int = 0,
             scrobbled: bool = False,
             lastfm_updated_now_playing: bool = False,
             clean_name: str = None,
@@ -16,6 +17,7 @@ class Track:
         self.album = album
         self.playing = playing
         self.time_played = time_played
+        self.duration = duration
         self.scrobbled = scrobbled
         self.lastfm_updated_now_playing = lastfm_updated_now_playing
         self.clean_name = clean_name
@@ -27,6 +29,12 @@ class Track:
     def display_name(self) -> str:
         return f"`{self.clean_name}` by {self.artist} from `{self.clean_album}`"
 
+    def get_scrobbled_threshold(self) -> int:
+        return min(round(self.duration / 2), 120) if self.duration else 120
+
+    def is_ready_to_be_scrobbled(self) -> bool:
+        return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
+
 
 class AppleMusicTrack(Track):
     def __init__(self, track_info, playing):
@@ -35,7 +43,6 @@ class AppleMusicTrack(Track):
         self.index = None
         self.persistent_id = None
         self.time = None
-        self.duration = None
         self.album_artist = None
         self.composer = None
         self.genre = None
@@ -74,12 +81,6 @@ class AppleMusicTrack(Track):
             attr_name = ae_type_map.get(str(key))
             if attr_name:
                 setattr(self, attr_name, value)
-
-    def get_scrobbled_threshold(self) -> int:
-        return min(round(self.duration / 2), 120) if self.duration else 120
-
-    def is_ready_to_be_scrobbled(self) -> bool:
-        return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
 
 
 class LastFmTrack(Track):

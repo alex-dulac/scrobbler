@@ -3,7 +3,9 @@ from spotipy.oauth2 import SpotifyOAuth
 
 from config import settings
 from models.artist import SpotifyArtist
+from models.track import SpotifyTrack
 from models.user import SpotifyUser
+from utils import clean_up_title
 
 
 class SpotifyService:
@@ -30,10 +32,24 @@ class SpotifyService:
             return None
 
 
-    async def poll_spotify(self) -> tuple[str, str, str] | None:
+    async def poll_spotify(self) -> SpotifyTrack | None:
         result: dict = self.spotify.current_user_playing_track()
+        # print(result)
+
         if result:
-            return result['item']['album']['name'], result['item']['artists'][0]['name'], result['item']['name']
+            clean_name = clean_up_title(result['item']['name'])
+            clean_album = clean_up_title(result['item']['album']['name'])
+            duration = result['item']['duration_ms'] / 1000  # convert ms to seconds
+
+            return SpotifyTrack(
+                artist=result['item']['artists'][0]['name'],
+                album=result['item']['album']['name'],
+                name=result['item']['name'],
+                clean_name=clean_name,
+                clean_album=clean_album,
+                duration=duration,
+                playing=result['is_playing']
+            )
         else:
             return None
 
