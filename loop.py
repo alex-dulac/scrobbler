@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import signal
 import sys
+from collections import Counter
 
 from loguru import logger
 
@@ -34,21 +35,41 @@ def clear_line() -> None:
     sys.stdout.flush()
 
 
-async def stop() -> None:
-    global loop
+def log_session_scrobbles() -> None:
     global session_scrobbles
-    new_line()
 
     if len(session_scrobbles) > 0:
         print("Scrobbles during this session:")
         new_line()
 
         for scrobble in session_scrobbles:
-            print(scrobble.name)
-            print(scrobble.artist)
-            print(scrobble.album)
-            print(scrobble.scrobbled_at)
-            new_line()
+            print(scrobble.display_name())
+        new_line()
+
+        artist_counts = Counter(scrobble.artist for scrobble in session_scrobbles)
+        song_counts = Counter(scrobble.name for scrobble in session_scrobbles)
+        multiple_scrobbles = {song: count for song, count in song_counts.items() if count > 1}
+
+        print("Artist scrobble counts:")
+        for artist, count in artist_counts.items():
+            print(f"{artist}: {count}")
+        new_line()
+
+        if len(multiple_scrobbles) > 0:
+            print("Double dippers!:")
+            for song, count in multiple_scrobbles.items():
+                print(f"{song}: {count} times")
+        new_line()
+    else:
+        print("No scrobbles during this session.")
+        new_line()
+
+
+async def stop() -> None:
+    global loop
+    new_line()
+
+    log_session_scrobbles()
 
     spacer()
     print("Thank you for scrobbling. Bye.")
@@ -82,16 +103,19 @@ def signal_handler(signal, frame) -> None:
 
 
 async def log_current_song(compare: Comparison, current_song) -> None:
-    logger.info(f"Scrobble Count: {scrobble_count}")
-
     if compare.no_song_playing:
         return logger.info("No song is currently playing.")
 
     logger.info(f"Current song: {current_song.display_name()}")
-    logger.info("Scrobbled" if current_song.scrobbled else f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
+    logger.info(f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
 
     scrobbles = await lastfm.current_track_user_scrobbles(current_song)
-    logger.info(f"Count of scrobbles for current track: {len(scrobbles)}")
+    if len(scrobbles) > 0:
+        logger.info(f"Count of scrobbles for current track: {len(scrobbles)}")
+        logger.info(f"First scrobble: {scrobbles[-1].scrobbled_at if scrobbles else 'None'}")
+        logger.info(f"Most recent scrobble: {scrobbles[0].scrobbled_at if scrobbles else 'None'}")
+    else:
+        logger.info("No scrobbles for current track!")
 
 
 async def run() -> None:
@@ -123,7 +147,9 @@ async def run() -> None:
         if compare.update_song:
             current_song = poll
             current_song.time_played = 0
+            new_line()
             await log_current_song(compare, current_song)
+
             if compare.update_lastfm_now_playing:
                 current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
             continue
@@ -141,6 +167,7 @@ async def run() -> None:
                 session_scrobbles.append(scrobbled_track)
                 current_song.scrobbled = True
                 scrobble_count += 1
+                logger.info(f"Scrobble Count: {scrobble_count}")
                 status = f" Song: {current_song.display_name()} | Scrobbled"
         else:
             status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
