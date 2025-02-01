@@ -87,12 +87,14 @@ class LastFmTrack(Track):
     def __init__(
             self,
             name: str = None,
+            clean_name: str = None,
             artist: str = None,
             album: str = None,
+            clean_album: str = None,
             scrobbled_at: str = None,
             loved_at: str = None
     ):
-        super().__init__(name=name, artist=artist, album=album)
+        super().__init__(name=name, clean_name=clean_name, artist=artist, album=album, clean_album=clean_album)
         self.scrobbled_at = scrobbled_at
         self.loved_at = loved_at
 
@@ -102,7 +104,9 @@ class LastFmTrack(Track):
             "artist": self.artist,
             "album": self.album,
             "scrobbled_at": self.scrobbled_at,
-            "loved_at": self.loved_at
+            "loved_at": self.loved_at,
+            "clean_name": self.clean_name,
+            "clean_album": self.clean_album
         }
 
 

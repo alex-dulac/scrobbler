@@ -198,8 +198,10 @@ class LastFmService:
                 logger.info(f"Scrobbled to LastFm: {current_song.display_name()}")
                 return LastFmTrack(
                     name=track,
+                    clean_name=clean_up_title(track),
                     artist=artist,
                     album=album,
+                    clean_album=clean_up_title(album),
                     scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
                 )
 
