@@ -179,6 +179,9 @@ class LastFmService:
         except pylast.WSError as e:
             logger.error(f"Failed to update Last.fm now playing: {e}")
             return False
+        except pylast.NetworkError as e:
+            logger.error(f"Failed to update Last.fm now playing: {e}")
+            return False
 
 
     async def scrobble_to_lastfm(self, current_song: Track) -> LastFmTrack | None:
@@ -204,8 +207,10 @@ class LastFmService:
                     clean_album=clean_up_title(album),
                     scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
                 )
-
             except pylast.WSError as e:
+                logger.error(f"Failed to scrobble to Last.fm: {e}")
+                return None
+            except pylast.NetworkError as e:
                 logger.error(f"Failed to scrobble to Last.fm: {e}")
                 return None
 

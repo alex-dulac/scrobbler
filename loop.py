@@ -164,11 +164,12 @@ async def run() -> None:
             status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
             if current_song.is_ready_to_be_scrobbled():
                 scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
-                session_scrobbles.append(scrobbled_track)
-                current_song.scrobbled = True
-                scrobble_count += 1
-                logger.info(f"Scrobble Count: {scrobble_count}")
-                status = f" Song: {current_song.display_name()} | Scrobbled"
+                if scrobbled_track:
+                    session_scrobbles.append(scrobbled_track)
+                    current_song.scrobbled = True
+                    scrobble_count += 1
+                    logger.info(f"Scrobble Count: {scrobble_count}")
+                    status = f" Song: {current_song.display_name()} | Scrobbled"
         else:
             status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
 

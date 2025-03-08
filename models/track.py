@@ -10,7 +10,8 @@ class Track:
             scrobbled: bool = False,
             lastfm_updated_now_playing: bool = False,
             clean_name: str = None,
-            clean_album: str = None
+            clean_album: str = None,
+            **kwargs
     ):
         self.name = name
         self.artist = artist
@@ -22,6 +23,9 @@ class Track:
         self.lastfm_updated_now_playing = lastfm_updated_now_playing
         self.clean_name = clean_name
         self.clean_album = clean_album
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def has_clean_name(self) -> bool:
         return self.name != self.clean_name
@@ -84,17 +88,8 @@ class AppleMusicTrack(Track):
 
 
 class LastFmTrack(Track):
-    def __init__(
-            self,
-            name: str = None,
-            clean_name: str = None,
-            artist: str = None,
-            album: str = None,
-            clean_album: str = None,
-            scrobbled_at: str = None,
-            loved_at: str = None
-    ):
-        super().__init__(name=name, clean_name=clean_name, artist=artist, album=album, clean_album=clean_album)
+    def __init__(self, scrobbled_at: str = None, loved_at: str = None, **kwargs):
+        super().__init__(**kwargs)
         self.scrobbled_at = scrobbled_at
         self.loved_at = loved_at
 
