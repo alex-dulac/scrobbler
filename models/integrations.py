@@ -7,3 +7,10 @@ class Integration(Enum):
 
     def __str__(self) -> str:
         return self.name.lower()
+
+    def normalized_name(self) -> str:
+        names = {
+            Integration.APPLE_MUSIC: 'Apple Music',
+            Integration.SPOTIFY: 'Spotify'
+        }
+        return names.get(self, self.name)

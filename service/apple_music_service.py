@@ -14,7 +14,7 @@ Apple Music related methods
 
 async def handle_applescript_error(e: ScriptError) -> None:
     if e.number == -1728:
-        logger.info("Apple Music is open but no song is selected.")
+        # logger.info("Apple Music is open but no song is selected.")
         return None
     elif e.number == -609:
         logger.info("Connection is invalid.")

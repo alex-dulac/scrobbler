@@ -106,7 +106,8 @@ async def log_current_song(compare: Comparison, current_song) -> None:
     if compare.no_song_playing:
         return logger.info("No song is currently playing.")
 
-    logger.info(f"Current song: {current_song.display_name()}")
+    logger.info(f"{active_integration.normalized_name()} currently playing:")
+    logger.info(f"  {current_song.display_name()}")
     logger.info(f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
 
     scrobbles = await lastfm.current_track_user_scrobbles(current_song)
@@ -140,6 +141,11 @@ async def run() -> None:
         compare = await poll_comparison(poll, current_song, None)
 
         if compare.no_song_playing:
+            if current_song:
+                current_song = None
+                new_line()
+                await log_current_song(compare, current_song)
+
             print(" No song is currently playing...", end="\r")
             await asyncio.sleep(1)
             continue
