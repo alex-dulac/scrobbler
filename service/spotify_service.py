@@ -33,22 +33,22 @@ class SpotifyService:
 
 
     async def poll_spotify(self) -> SpotifyTrack | None:
-        result: dict = self.spotify.current_user_playing_track()
-        # print(result)
+        result = self.spotify.current_user_playing_track()
+        track_data = result['item'] if result else None
 
-        if result:
-            clean_name = clean_up_title(result['item']['name'])
-            clean_album = clean_up_title(result['item']['album']['name'])
-            duration = result['item']['duration_ms'] / 1000  # convert ms to seconds
+        if track_data:
+            clean_name = clean_up_title(track_data['name'])
+            clean_album = clean_up_title(track_data['album']['name'])
+            duration = track_data['duration_ms'] / 1000  # convert ms to seconds
 
             return SpotifyTrack(
-                artist=result['item']['artists'][0]['name'],
-                album=result['item']['album']['name'],
-                name=result['item']['name'],
+                artist=track_data['artists'][0]['name'],
+                album=track_data['album']['name'],
+                name=track_data['name'],
                 clean_name=clean_name,
                 clean_album=clean_album,
                 duration=duration,
-                playing=result['is_playing']
+                playing=track_data
             )
         else:
             return None
