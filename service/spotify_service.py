@@ -48,7 +48,7 @@ class SpotifyService:
                 clean_name=clean_name,
                 clean_album=clean_album,
                 duration=duration,
-                playing=track_data
+                playing=result['is_playing']
             )
         else:
             return None
