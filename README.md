@@ -1,7 +1,6 @@
 # py-scrobbler
 
-py-scrobbler is a tool for tracking and logging your music listening activity from Apple Music and Spotify. It is built using Python and leverages several modern technologies to provide a seamless experience.
-
+py-scrobbler is a tool for tracking and logging your music listening activity to Last.fm from Apple Music and Spotify. It is built using Python and leverages several modern technologies to provide a seamless experience.
 
 
 ## Features
@@ -19,15 +18,15 @@ py-scrobbler is a tool for tracking and logging your music listening activity fr
 
 - Python 3.10+
 - Apple Music application installed on your macOS
-- Spotify account
 - Last.fm account
+- Spotify account (optional)
 
 ### Installation
 
 1. **Clone the repository:**
     ```sh
-    git clone https://github.com/alex-dulac/apple-music-scrobbler.git
-    cd apple-music-scrobbler
+    git clone https://github.com/alex-dulac/py-scrobbler.git
+    cd py-scrobbler
     ```
 
 2. **Set up a virtual environment:**
@@ -68,31 +67,35 @@ The `.env` file should contain the environment variables found in `.env.example`
     python loop.py
     ```
    ```
-   2025-01-18 10:29:02.425 | INFO     | __main__:handle_arguments:74 - Active Integration: APPLE_MUSIC
-   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:83 - Scrobble Count: 0
-   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:88 - Current song: '`Women` by Def Leppard from `Hysteria`'
-   2025-01-18 10:29:02.554 | INFO     | __main__:log_current_song:89 - Scrobble threshold: 120
-   2025-01-18 10:29:03.998 | INFO     | __main__:log_current_song:92 - Count of scrobbles for current track: 80
-   2025-01-18 10:29:04.168 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
-   ==============================================================================================================
-   2025-01-18 10:31:09.242 | INFO     | service.lastfm_service:scrobble_to_lastfm:198 - Scrobbled to LastFm: `Women` by Def Leppard from `Hysteria`
-   2025-01-18 10:31:21.622 | INFO     | __main__:log_current_song:83 - Scrobble Count: 1                         
-   2025-01-18 10:31:21.623 | INFO     | __main__:log_current_song:88 - Current song: '`Rocket` by Def Leppard from `Hysteria`'
-   2025-01-18 10:31:21.623 | INFO     | __main__:log_current_song:89 - Scrobble threshold: 120
-   2025-01-18 10:31:22.975 | INFO     | __main__:log_current_song:92 - Count of scrobbles for current track: 76
-   2025-01-18 10:31:23.123 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
-   ==============================================================================================================
-   Song: `Rocket` by Def Leppard from `Hysteria` | Time played: 105s
+   2025-03-09 11:46:03.747 | INFO     | __main__:log_current_song:109 - Current song: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen`
+   2025-03-09 11:46:03.748 | INFO     | __main__:log_current_song:110 - Scrobble threshold: 114
+   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:114 - Count of scrobbles for current track: 29
+   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:115 - First scrobble: 2011-04-09 16:19:01
+   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:116 - Most recent scrobble: 2025-02-24 13:34:42
+   2025-03-09 11:46:06.823 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
+   2025-03-09 11:48:04.646 | INFO     | service.lastfm_service:scrobble_to_lastfm:201 - Scrobbled to LastFm: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen`
+   2025-03-09 11:48:04.647 | INFO     | __main__:run:171 - Scrobble Count: 42
+   Song: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen` | Scrobbled
+   
+   2025-03-09 11:49:52.605 | INFO     | __main__:log_current_song:109 - Current song: `On Through The Night` by Def Leppard from `High 'N' Dry`
+   2025-03-09 11:49:52.605 | INFO     | __main__:log_current_song:110 - Scrobble threshold: 120
+   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:114 - Count of scrobbles for current track: 30
+   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:115 - First scrobble: 2024-02-03 14:01:37
+   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:116 - Most recent scrobble: 2025-02-13 15:15:21
+   2025-03-09 11:49:54.656 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
+   2025-03-09 11:51:58.973 | INFO     | service.lastfm_service:scrobble_to_lastfm:201 - Scrobbled to LastFm: `On Through The Night` by Def Leppard from `High 'N' Dry`
+   2025-03-09 11:51:58.973 | INFO     | __main__:run:171 - Scrobble Count: 43
+   Song: `On Through The Night` by Def Leppard from `High 'N' Dry` | Scrobbled
    ```
 
 ### Key Files
 
 - **app.py**: The main entry point for the FastAPI application.
-- **model.py**: Contains the data models used in the application.
 - **loop.py**: A script to run the application in a loop, continuously polling Apple Music for the current track.
 - **config/settings.py**: Configuration settings for the application, including environment variables.
 - **api/**: Contains the API routes and endpoints.
-- **service/**: Contains the service modules for interacting with Apple Music and Last.fm.
+- **models/**: Contains the data models used in the application.
+- **service/**: Contains the service modules for interacting with Apple Music, Last.fm, and Spotify.
 
 ## Frontend Integration
 
