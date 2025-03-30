@@ -36,29 +36,7 @@ def clear_line() -> None:
     sys.stdout.flush()
 
 
-async def scrobble(current_song: Track) -> str:
-    global scrobble_count, session_scrobbles, offline_storage
-
-    if not await internet():
-        offline_storage.append(current_song) if current_song not in offline_storage else None
-        return f" Song: {current_song.display_name()} | NO INTERNET"
-
-    scrobbled_track = await lastfm.scrobble(current_song)
-    if scrobbled_track:
-        session_scrobbles.append(scrobbled_track)
-        current_song.scrobbled = True
-        scrobble_count += 1
-        logger.info(f"Scrobble Count: {scrobble_count}")
-        return f" Song: {current_song.display_name()} | Scrobbled"
-
-
 async def log_session_scrobbles() -> None:
-    if len(offline_storage) > 0:
-        print("Attempting to scrobble offline storage tracks...")
-        for track in offline_storage:
-            await scrobble(track)
-        offline_storage.clear()
-
     if len(session_scrobbles) > 0:
         print("Scrobbles during this session:")
         new_line()
@@ -86,46 +64,9 @@ async def log_session_scrobbles() -> None:
         new_line()
 
 
-async def stop() -> None:
-    global loop
-    new_line()
-
-    await log_session_scrobbles()
-
-    spacer()
-    print("Thank you for scrobbling. Bye.")
-    spacer()
-    new_line()
-    loop = False
-
-
-def handle_arguments() -> None:
-    global active_integration
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--integration", type=str, required=False)
-
-    args = parser.parse_args()
-    if args.integration:
-        match args.integration.upper():
-            case Integration.APPLE_MUSIC.name:
-                active_integration = Integration.APPLE_MUSIC
-            case Integration.SPOTIFY.name:
-                active_integration = Integration.SPOTIFY
-            case _:
-                raise ValueError(f"Invalid integration: {args.integration.upper()}")
-
-    logger.info(f"Active Integration: {active_integration.name}")
-
-
-def signal_handler(signal, frame) -> None:
-    clear_line()
-    asyncio.create_task(stop())
-
-
 async def log_current_song(compare: Comparison, current_song: Track) -> None:
     if compare.no_song_playing:
-        return logger.info("No song is currently playing.")
+        return
 
     logger.info(f"{active_integration.normalized_name()} currently playing:")
     logger.info(f"  {current_song.display_name()}")
@@ -178,11 +119,6 @@ async def run() -> None:
             else:
                 print(" No song is currently playing...", end="\r")
                 await asyncio.sleep(1)
-                continue
-
-        if compare.pending_scrobble:
-            logger.info("Attempting to scrobble pending scrobble...")
-            await scrobble(current_song)
             continue
 
         if compare.update_song:
@@ -190,31 +126,95 @@ async def run() -> None:
             current_song.time_played = 0
             new_line()
             await log_current_song(compare, current_song)
-
             if compare.update_lastfm_now_playing:
                 if not await internet():
                     logger.info("No internet connection. Cannot update Last.fm status...")
-                    continue
-                current_song.lastfm_updated_now_playing = await lastfm.update_now_playing(current_song)
+                else:
+                    current_song.lastfm_updated_now_playing = await lastfm.update_now_playing(current_song)
             continue
 
         if compare.update_song_playing_status:
             current_song.playing = poll.playing
 
-        if current_song.scrobbled:
-            status = f" Song: {current_song.display_name()} | Scrobbled"
-        elif current_song.playing:
-            current_song.time_played += 1
-            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
-            if current_song.is_ready_to_be_scrobbled():
-                status = await scrobble(current_song)
+        display_name = f" {current_song.display_name()}"
+        time_played = f"Time played: {current_song.time_played}s"
+
+        scrobbled = f"{display_name} | Scrobbled"
+        pending = f"{display_name} | Pending Scrobble"
+        playing = f"{display_name} | {time_played}"
+        paused = f"{playing} | Paused"
+
+        if current_song.playing is False:
+            display_status = paused
+        elif current_song.scrobbled:
+            display_status = scrobbled
         else:
-            status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
+            current_song.time_played += 1
+            display_status = playing
+            if current_song.is_ready_to_be_scrobbled():
+                if not await internet():
+                    display_status = pending
+                    offline_storage.append(current_song) if current_song not in offline_storage else None
+                else:
+                    scrobbled_track = await lastfm.scrobble(current_song)
+                    if scrobbled_track:
+                        session_scrobbles.append(scrobbled_track)
+                        current_song.scrobbled = True
+                        scrobble_count += 1
+                        logger.info(f"Scrobble Count: {scrobble_count}")
+                        display_status = scrobbled
 
         clear_line()
-        print(status, end="\r")
+        print(display_status, end="\r")
         await asyncio.sleep(1)
 
+
+async def stop() -> None:
+    global loop
+    new_line()
+
+    count = 0
+    if await internet() and len(offline_storage) > 0:
+        for track in offline_storage:
+            scrobbled_track = await lastfm.scrobble(track)
+            session_scrobbles.append(scrobbled_track)
+            count += 1 if scrobbled_track else 0
+        logger.info(f"Scrobbled {count} offline track(s)...")
+    else:
+        logger.info(f"No internet connection. Skipping {len(offline_storage)} offline scrobble(s)...")
+    new_line()
+
+    await log_session_scrobbles()
+
+    spacer()
+    print("Thank you for scrobbling. Bye.")
+    spacer()
+    new_line()
+    loop = False
+
+
+def signal_handler(signal, frame) -> None:
+    clear_line()
+    asyncio.create_task(stop())
+
+
+def handle_arguments() -> None:
+    global active_integration
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--integration", type=str, required=False)
+
+    args = parser.parse_args()
+    if args.integration:
+        match args.integration.upper():
+            case Integration.APPLE_MUSIC.name:
+                active_integration = Integration.APPLE_MUSIC
+            case Integration.SPOTIFY.name:
+                active_integration = Integration.SPOTIFY
+            case _:
+                raise ValueError(f"Invalid integration: {args.integration.upper()}")
+
+    logger.info(f"Active Integration: {active_integration.name}")
 
 
 if __name__ == "__main__":
