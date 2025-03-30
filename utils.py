@@ -1,4 +1,5 @@
 import re
+import socket
 
 from loguru import logger
 
@@ -18,6 +19,7 @@ class Comparison:
             self,
             no_song_playing: bool = False,
             is_same_song: bool = False,
+            pending_scrobble: bool = False,
             update_song: bool = False,
             update_song_playing_status: bool = False,
             update_lastfm_now_playing: bool = False,
@@ -25,6 +27,7 @@ class Comparison:
     ) -> None:
         self.no_song_playing = no_song_playing
         self.is_same_song = is_same_song
+        self.pending_scrobble = pending_scrobble
         self.update_song = update_song
         self.update_song_playing_status = update_song_playing_status
         self.update_lastfm_now_playing = update_lastfm_now_playing
@@ -52,7 +55,8 @@ async def poll_comparison(
 
     if is_same_song(poll, current_song):
         update_song_playing_status = poll.playing != current_song.playing
-        return Comparison(is_same_song=True, update_song_playing_status=update_song_playing_status)
+        pending_scrobble = current_song.pending_scrobble
+        return Comparison(is_same_song=True, update_song_playing_status=update_song_playing_status, pending_scrobble=pending_scrobble)
 
     update_song = song_has_changed(poll, current_song)
 
@@ -114,3 +118,19 @@ def clean_up_title(title: str) -> str:
     clean_title = re.sub(r'[\(\[][^)\]]*edit[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
 
     return clean_title
+
+
+async def internet(host="8.8.8.8", port=53, timeout=3):
+    """
+    Host: 8.8.8.8 (google-public-dns-a.google.com)
+    OpenPort: 53/tcp
+    Service: domain (DNS/TCP)
+    https://stackoverflow.com/a/33117579
+    """
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        return True
+    except socket.error:
+        return False
+

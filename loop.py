@@ -7,11 +7,11 @@ from collections import Counter
 from loguru import logger
 
 from models.integrations import Integration
-from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack
+from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack, Track
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import LastFmService
 from service.spotify_service import SpotifyService
-from utils import poll_comparison, Comparison
+from utils import poll_comparison, Comparison, internet
 
 bar = "=" * 110
 loop = True
@@ -20,6 +20,7 @@ lastfm = LastFmService()
 spotify = SpotifyService()
 scrobble_count = 0
 session_scrobbles: [LastFmTrack] = []
+offline_storage: [Track] = []
 
 
 def new_line() -> None:
@@ -35,8 +36,28 @@ def clear_line() -> None:
     sys.stdout.flush()
 
 
-def log_session_scrobbles() -> None:
-    global session_scrobbles
+async def scrobble(current_song: Track) -> str:
+    global scrobble_count, session_scrobbles, offline_storage
+
+    if not await internet():
+        offline_storage.append(current_song) if current_song not in offline_storage else None
+        return f" Song: {current_song.display_name()} | NO INTERNET"
+
+    scrobbled_track = await lastfm.scrobble(current_song)
+    if scrobbled_track:
+        session_scrobbles.append(scrobbled_track)
+        current_song.scrobbled = True
+        scrobble_count += 1
+        logger.info(f"Scrobble Count: {scrobble_count}")
+        return f" Song: {current_song.display_name()} | Scrobbled"
+
+
+async def log_session_scrobbles() -> None:
+    if len(offline_storage) > 0:
+        print("Attempting to scrobble offline storage tracks...")
+        for track in offline_storage:
+            await scrobble(track)
+        offline_storage.clear()
 
     if len(session_scrobbles) > 0:
         print("Scrobbles during this session:")
@@ -69,7 +90,7 @@ async def stop() -> None:
     global loop
     new_line()
 
-    log_session_scrobbles()
+    await log_session_scrobbles()
 
     spacer()
     print("Thank you for scrobbling. Bye.")
@@ -102,7 +123,7 @@ def signal_handler(signal, frame) -> None:
     asyncio.create_task(stop())
 
 
-async def log_current_song(compare: Comparison, current_song) -> None:
+async def log_current_song(compare: Comparison, current_song: Track) -> None:
     if compare.no_song_playing:
         return logger.info("No song is currently playing.")
 
@@ -110,7 +131,16 @@ async def log_current_song(compare: Comparison, current_song) -> None:
     logger.info(f"  {current_song.display_name()}")
     logger.info(f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
 
+    if not await internet():
+        logger.info("No internet connection. Cannot get scrobbles for current track...")
+        return
+
     scrobbles = await lastfm.current_track_user_scrobbles(current_song)
+
+    if scrobbles is False:
+        logger.info("Failed to get scrobbles for current track.")
+        return
+
     if len(scrobbles) > 0:
         logger.info(f"Count of scrobbles for current track: {len(scrobbles)}")
         logger.info(f"First scrobble: {scrobbles[-1].scrobbled_at if scrobbles else 'None'}")
@@ -145,9 +175,14 @@ async def run() -> None:
                 current_song = None
                 new_line()
                 await log_current_song(compare, current_song)
+            else:
+                print(" No song is currently playing...", end="\r")
+                await asyncio.sleep(1)
+                continue
 
-            print(" No song is currently playing...", end="\r")
-            await asyncio.sleep(1)
+        if compare.pending_scrobble:
+            logger.info("Attempting to scrobble pending scrobble...")
+            await scrobble(current_song)
             continue
 
         if compare.update_song:
@@ -157,7 +192,10 @@ async def run() -> None:
             await log_current_song(compare, current_song)
 
             if compare.update_lastfm_now_playing:
-                current_song.lastfm_updated_now_playing = await lastfm.update_lastfm_now_playing(current_song)
+                if not await internet():
+                    logger.info("No internet connection. Cannot update Last.fm status...")
+                    continue
+                current_song.lastfm_updated_now_playing = await lastfm.update_now_playing(current_song)
             continue
 
         if compare.update_song_playing_status:
@@ -169,13 +207,7 @@ async def run() -> None:
             current_song.time_played += 1
             status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s"
             if current_song.is_ready_to_be_scrobbled():
-                scrobbled_track = await lastfm.scrobble_to_lastfm(current_song)
-                if scrobbled_track:
-                    session_scrobbles.append(scrobbled_track)
-                    current_song.scrobbled = True
-                    scrobble_count += 1
-                    logger.info(f"Scrobble Count: {scrobble_count}")
-                    status = f" Song: {current_song.display_name()} | Scrobbled"
+                status = await scrobble(current_song)
         else:
             status = f" Song: {current_song.display_name()} | Time played: {current_song.time_played}s | Paused"
 

@@ -11,6 +11,7 @@ class Track:
             lastfm_updated_now_playing: bool = False,
             clean_name: str = None,
             clean_album: str = None,
+            pending_scrobble: bool = False,
             **kwargs
     ):
         self.name = name
@@ -23,6 +24,7 @@ class Track:
         self.lastfm_updated_now_playing = lastfm_updated_now_playing
         self.clean_name = clean_name
         self.clean_album = clean_album
+        self.pending_scrobble = pending_scrobble
 
         for key, value in kwargs.items():
             setattr(self, key, value)

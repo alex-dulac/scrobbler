@@ -61,10 +61,10 @@ async def get_current_song():
         logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
 
     if compare.update_lastfm_now_playing:
-        app_state.current_song.lastfm_updated_now_playing = await lasfm.update_lastfm_now_playing(app_state.current_song)
+        app_state.current_song.lastfm_updated_now_playing = await lasfm.update_now_playing(app_state.current_song)
 
     if compare.update_lastfm_album:
-        app_state.lastfm_album = await lasfm.get_lastfm_album(app_state.current_song.album, app_state.current_song.artist)
+        app_state.lastfm_album = await lasfm.get_album(app_state.current_song.album, app_state.current_song.artist)
 
     data = {
         "current_song": app_state.current_song,

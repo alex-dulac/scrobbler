@@ -10,7 +10,7 @@ from config import settings
 from models.album import LastFmAlbum
 from models.artist import LastFmArtist
 from models.lastfm_models import LastFmTopItem
-from models.track import AppleMusicTrack, LastFmTrack, Track
+from models.track import LastFmTrack, Track
 from models.user import LastFmUser
 from utils import clean_up_title
 
@@ -98,7 +98,7 @@ class LastFmService:
                 album=album_name,
                 scrobbled_at=scrobbled_at.strftime(settings.DATETIME_FORMAT)
             )
-            a = await self.get_lastfm_album(album_name, artist_name)
+            a = await self.get_album(album_name, artist_name)
 
             tracks.append([t, a])
 
@@ -167,7 +167,7 @@ class LastFmService:
         return albums
 
 
-    async def update_lastfm_now_playing(self, current_song: Track) -> bool:
+    async def update_now_playing(self, current_song: Track) -> bool:
         try:
             self.network.update_now_playing(
                 artist=current_song.artist,
@@ -176,15 +176,12 @@ class LastFmService:
             )
             logger.info("Updated Last.fm now playing")
             return True
-        except pylast.WSError as e:
-            logger.error(f"Failed to update Last.fm now playing: {e}")
-            return False
-        except pylast.NetworkError as e:
+        except pylast.PyLastError as e:
             logger.error(f"Failed to update Last.fm now playing: {e}")
             return False
 
 
-    async def scrobble_to_lastfm(self, current_song: Track) -> LastFmTrack | None:
+    async def scrobble(self, current_song: Track) -> LastFmTrack | None:
         artist = current_song.artist
         track = current_song.clean_name
         album = current_song.clean_album
@@ -207,10 +204,7 @@ class LastFmService:
                     clean_album=clean_up_title(album),
                     scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
                 )
-            except pylast.WSError as e:
-                logger.error(f"Failed to scrobble to Last.fm: {e}")
-                return None
-            except pylast.NetworkError as e:
+            except pylast.PyLastError as e:
                 logger.error(f"Failed to scrobble to Last.fm: {e}")
                 return None
 
@@ -233,7 +227,7 @@ class LastFmService:
 
         try:
             image_url = album.get_cover_image(size=pylast.SIZE_MEGA)
-        except pylast.WSError as e:
+        except pylast.PyLastError as e:
             logger.error(f"Failed to get album image_url: {e}")
 
         if image_url is None:
@@ -241,13 +235,13 @@ class LastFmService:
             clean_album = self.network.get_album(title=clean_title, artist=album.artist.name)
             try:
                 image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
-            except pylast.WSError as e:
+            except pylast.PyLastError as e:
                 logger.error(f"Failed to get album image_url: {e}")
 
         return image_url
 
 
-    async def get_lastfm_album(self, title: str, artist: str) -> LastFmAlbum | None:
+    async def get_album(self, title: str, artist: str) -> LastFmAlbum | None:
         album = self.network.get_album(title=title, artist=artist)
 
         image_url = await self.get_album_image_url(album)
@@ -263,26 +257,31 @@ class LastFmService:
             return None
 
 
-    async def current_track_user_scrobbles(self, current_song: AppleMusicTrack) -> list[LastFmTrack]:
+    async def current_track_user_scrobbles(self, current_song: Track) -> bool | list[LastFmTrack]:
         user = await self.get_user()
-
-        # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
-        track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
-        if current_song.has_clean_name():
-            clean_track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.clean_name)
-            track_scrobbles.extend(clean_track_scrobbles)
-
         tracks = []
-        for t in track_scrobbles:
-            timestamp = int(t.timestamp)
-            timestamp = datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
-            track = LastFmTrack(
-                name=t.track.title,
-                artist=t.track.artist.name,
-                album=t.album,
-                scrobbled_at=timestamp
-            )
-            tracks.append(track)
+
+        try:
+            # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
+            track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
+            if current_song.has_clean_name():
+                clean_track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.clean_name)
+                track_scrobbles.extend(clean_track_scrobbles)
+
+            for t in track_scrobbles:
+                timestamp = int(t.timestamp)
+                timestamp = datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
+                track = LastFmTrack(
+                    name=t.track.title,
+                    artist=t.track.artist.name,
+                    album=t.album,
+                    scrobbled_at=timestamp
+                )
+                tracks.append(track)
+        except pylast.PyLastError as e:
+            logger.error(f"Failed to get user scrobbles for {current_song.display_name()}")
+            logger.error(f"Error: {e}")
+            return False
 
         return tracks
 
@@ -301,7 +300,7 @@ class LastFmService:
             album_name = album.title
             artist_name = album.artist.name
 
-            last_fm_album = await self.get_lastfm_album(album_name, artist_name)
+            last_fm_album = await self.get_album(album_name, artist_name)
             last_fm_album.playcount = playcount
             results.append(last_fm_album)
 
