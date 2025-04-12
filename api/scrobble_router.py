@@ -27,8 +27,7 @@ async def scrobble_toggle():
 @scrobble_router.post("/scrobble/")
 async def scrobble_song():
     app_state = await get_app_state()
-    valid = await validate_scrobble_in_state(app_state)
-    if valid:
+    if await validate_scrobble_in_state(app_state):
         scrobbled_track = await lastfm.scrobble(app_state.current_song)
         app_state.current_song.scrobbled = True
         return {"result": scrobbled_track.to_dict() if scrobbled_track else None}

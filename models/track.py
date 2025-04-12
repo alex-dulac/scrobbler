@@ -37,8 +37,7 @@ class Track:
         return min(round(self.duration / 2), 120) if self.duration else 120
 
     def is_ready_to_be_scrobbled(self) -> bool:
-        return self.playing and not self.scrobbled and self.time_played > 5
-        #return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
+        return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
 
     def time_remaining(self):
         return self.duration - self.time_played

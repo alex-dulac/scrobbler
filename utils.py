@@ -113,6 +113,7 @@ def clean_up_title(title: str) -> str:
     clean_title = re.sub(r'[\(\[][^)\]]*extended[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*anniversary[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'[\(\[][^)\]]*edit[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'[\(\[][^)\]]*deluxe[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
 
     return clean_title
 
