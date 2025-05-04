@@ -53,6 +53,11 @@ async def log_current_song(current_song: Track) -> None:
         logger.info("No scrobbles for current track!")
 
 
+async def output(display_status: str) -> None:
+    print(display_status, end="\r")
+    await asyncio.sleep(1)
+
+
 async def run() -> None:
     """
     Creates a continuous loop that polls for the current playing song, updates its status,
@@ -78,8 +83,7 @@ async def run() -> None:
             if current_song:
                 current_song = None
                 new_line()
-            print(" No song is currently playing...", end="\r")
-            await asyncio.sleep(1)
+            await output(" No song is currently playing...")
             continue
 
         if compare.update_song:
@@ -126,8 +130,7 @@ async def run() -> None:
                         display_status = scrobbled
 
         clear_line()
-        print(display_status, end="\r")
-        await asyncio.sleep(1)
+        await output(display_status)
 
 
 async def log_session_scrobbles() -> None:
@@ -167,6 +170,8 @@ async def check_pending_scrobbles() -> None:
                 session_scrobbles.append(scrobbled_track)
                 count += 1
         logger.info(f"Scrobbled {count} pending track(s)...")
+    elif len(pending_scrobbles) == 0:
+        logger.info("No pending scrobbles.")
     else:
         logger.info(f"No internet connection. Skipping {len(pending_scrobbles)} pending scrobble(s)...")
 
