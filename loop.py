@@ -53,11 +53,6 @@ async def log_current_song(current_song: Track) -> None:
         logger.info("No scrobbles for current track!")
 
 
-async def output(display_status: str) -> None:
-    print(display_status, end="\r")
-    await asyncio.sleep(1)
-
-
 async def run() -> None:
     """
     Creates a continuous loop that polls for the current playing song, updates its status,
@@ -83,7 +78,8 @@ async def run() -> None:
             if current_song:
                 current_song = None
                 new_line()
-            await output(" No song is currently playing...")
+            print(" No song is currently playing...", end="\r")
+            await asyncio.sleep(1)
             continue
 
         if compare.update_song:
@@ -130,7 +126,8 @@ async def run() -> None:
                         display_status = scrobbled
 
         clear_line()
-        await output(display_status)
+        print(display_status, end="\r")
+        await asyncio.sleep(1)
 
 
 async def log_session_scrobbles() -> None:
