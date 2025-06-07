@@ -125,7 +125,6 @@ async def run() -> None:
                         logger.info(f"Scrobble Count: {scrobble_count}")
                         display_status = scrobbled
 
-        clear_line()
         print(display_status, end="\r")
         await asyncio.sleep(1)
 
