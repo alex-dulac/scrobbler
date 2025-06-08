@@ -11,15 +11,16 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
 - **applescript**: A Python library to run AppleScript commands, used to interact with the Apple Music application.
 - **spotipy**: A Python interface to Spotify's API.
 - **Loguru**: A library for logging, providing an easy and powerful logging experience.
+- **Textual**: A TUI (Text User Interface) framework for Python, used to create an interactive terminal interface.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
-- Apple Music application installed on your macOS
+- Apple Music application installed on your macOS (if you want to scrobble from Apple Music)
+- Spotify account (if you want to scrobble from Spotify)
 - Last.fm account
-- Spotify account (optional)
 
 ### Installation
 
@@ -50,7 +51,13 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
 
 The `.env` file should contain the environment variables found in `.env.example`.
 
-### Running the FastAPI Application
+## Running the Application
+
+You can run py-scrobbler in three different ways:
+
+### FastAPI Web Application
+
+The FastAPI application provides a web API that can be consumed by frontend applications (see [scrobbler-web](https://github.com/alex-dulac/scrobbler-web) for accompanying React app).
 
 1. **Start the FastAPI server:**
    ```sh
@@ -60,49 +67,62 @@ The `.env` file should contain the environment variables found in `.env.example`
     ```sh
     uvicorn app:app --reload
     ```
+This starts the FastAPI server on http://localhost:8000. 
+<br>
+API documentation is built-in at http://localhost:8000/docs.
 
-### Running the Python Script App
+### Text User Interface (TUI)
+
+The TUI application provides an interactive terminal interface with visual elements like progress bars and formatted text.
+
+1. **Start the TUI:**
+   ```sh
+    python tui_app.py
+    ```
+   
+Features of the TUI:
+- Switch between Apple Music and Spotify with a button click
+- Visual progress bar showing scrobble progress
+- Session statistics showing top artists and repeat scrobbles
+- Process pending scrobbles that couldn't be sent due to connectivity issues
+- Rich text formatting for better readability
+
+### Command Line Interface
+
+The loop script provides a simple command-line interface that displays the currently playing track and scrobble status.
+
 1. **Run the loop script:**
     ```sh
     python loop.py
     ```
+   Defaults to Apple Music. You can specify which music service to use:
+    ```sh
+    python loop.py --integration spotify
+    ```
+
+   Sample output:
    ```
-   2025-03-09 11:46:03.747 | INFO     | __main__:log_current_song:109 - Current song: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen`
-   2025-03-09 11:46:03.748 | INFO     | __main__:log_current_song:110 - Scrobble threshold: 114
-   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:114 - Count of scrobbles for current track: 29
-   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:115 - First scrobble: 2011-04-09 16:19:01
-   2025-03-09 11:46:06.074 | INFO     | __main__:log_current_song:116 - Most recent scrobble: 2025-02-24 13:34:42
-   2025-03-09 11:46:06.823 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
-   2025-03-09 11:48:04.646 | INFO     | service.lastfm_service:scrobble_to_lastfm:201 - Scrobbled to LastFm: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen`
-   2025-03-09 11:48:04.647 | INFO     | __main__:run:171 - Scrobble Count: 42
-   Song: `Ain't Talkin' 'Bout Love` by Van Halen from `Van Halen` | Scrobbled
-   
-   2025-03-09 11:49:52.605 | INFO     | __main__:log_current_song:109 - Current song: `On Through The Night` by Def Leppard from `High 'N' Dry`
-   2025-03-09 11:49:52.605 | INFO     | __main__:log_current_song:110 - Scrobble threshold: 120
-   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:114 - Count of scrobbles for current track: 30
-   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:115 - First scrobble: 2024-02-03 14:01:37
-   2025-03-09 11:49:53.895 | INFO     | __main__:log_current_song:116 - Most recent scrobble: 2025-02-13 15:15:21
-   2025-03-09 11:49:54.656 | INFO     | service.lastfm_service:update_lastfm_now_playing:177 - Updated Last.fm now playing
-   2025-03-09 11:51:58.973 | INFO     | service.lastfm_service:scrobble_to_lastfm:201 - Scrobbled to LastFm: `On Through The Night` by Def Leppard from `High 'N' Dry`
-   2025-03-09 11:51:58.973 | INFO     | __main__:run:171 - Scrobble Count: 43
-   Song: `On Through The Night` by Def Leppard from `High 'N' Dry` | Scrobbled
+   2025-05-08 09:36:17.790 | INFO     | __main__:log_current_song:35 - Apple Music currently playing:
+   2025-05-08 09:36:17.790 | INFO     | __main__:log_current_song:36 -   `The Freaks, Nerds, & Romantics` by The Bouncing Souls from `Maniacal Laughter`
+   2025-05-08 09:36:17.791 | INFO     | __main__:log_current_song:37 - Scrobble threshold: 76
+   2025-05-08 09:36:18.224 | INFO     | __main__:log_current_song:48 - Count of scrobbles for current track: 41
+   2025-05-08 09:36:18.224 | INFO     | __main__:log_current_song:49 - First scrobble: 2008-08-20 19:32:01
+   2025-05-08 09:36:18.224 | INFO     | __main__:log_current_song:50 - Most recent scrobble: 2024-10-29 10:19:09
+   2025-05-08 09:36:18.427 | INFO     | service.lastfm_service:update_now_playing:177 - Updated Last.fm now playing
+   `The Freaks, Nerds, & Romantics` by The Bouncing Souls from `Maniacal Laughter` | Time played: 28s
    ```
 
 ### Key Files
 
 - **app.py**: The main entry point for the FastAPI application.
-- **loop.py**: A script to run the application in a loop, continuously polling Apple Music for the current track.
+- **tui_app.py**: A Text User Interface application with interactive elements.
+- **loop.py**: A script to run the application in a loop, continuously polling music services for the current track.
 - **config/settings.py**: Configuration settings for the application, including environment variables.
 - **api/**: Contains the API routes and endpoints.
 - **models/**: Contains the data models used in the application.
 - **service/**: Contains the service modules for interacting with Apple Music, Last.fm, and Spotify.
 
-## Frontend Integration
-
-This API is used with the following React project: [scrobbler-web](https://github.com/alex-dulac/scrobbler-web). 
-The React project provides a web interface to interact with this API, allowing users to view their scrobbled tracks, recent activity, and more.
-
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request for any changes.
+Contributions are welcome and encouraged! Please open an issue or submit a pull request for any changes.
 
