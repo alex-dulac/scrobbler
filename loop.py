@@ -2,11 +2,11 @@ import argparse
 import asyncio
 import signal
 import sys
-from collections import Counter
 
 from loguru import logger
 
 from models.integrations import Integration
+from models.session import SessionScrobbles
 from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack, Track
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import LastFmService
@@ -19,8 +19,7 @@ active_integration = Integration.APPLE_MUSIC
 lastfm = LastFmService()
 spotify = SpotifyService()
 scrobble_count = 0
-session_scrobbles: [LastFmTrack] = []
-pending_scrobbles: [Track] = []
+session = SessionScrobbles(lastfm)
 
 
 def new_line() -> None:
@@ -114,12 +113,12 @@ async def run() -> None:
             if current_song.is_ready_to_be_scrobbled():
                 if not await internet():
                     display_status = pending
-                    pending_scrobbles.append(current_song) if current_song not in pending_scrobbles else None
+                    session.add_pending(current_song)
                 else:
                     scrobbled_track = await lastfm.scrobble(current_song)
                     if scrobbled_track:
-                        session_scrobbles.append(scrobbled_track)
-                        pending_scrobbles.remove(current_song) if current_song in pending_scrobbles else None
+                        session.add_scrobble(scrobbled_track)
+                        session.remove_pending(current_song)
                         current_song.scrobbled = True
                         scrobble_count += 1
                         logger.info(f"Scrobble Count: {scrobble_count}")
@@ -129,57 +128,14 @@ async def run() -> None:
         await asyncio.sleep(1)
 
 
-async def log_session_scrobbles() -> None:
-    if len(session_scrobbles) > 0:
-        print("Scrobbles during this session:")
-        new_line()
-
-        for scrobble in session_scrobbles:
-            print(scrobble.display_name())
-        new_line()
-
-        artist_counts = Counter(scrobble.artist for scrobble in session_scrobbles)
-        song_counts = Counter(scrobble.name for scrobble in session_scrobbles)
-        multiple_scrobbles = {song: count for song, count in song_counts.items() if count > 1}
-
-        print("Artist scrobble counts:")
-        for artist, count in artist_counts.items():
-            print(f"{artist}: {count}")
-        new_line()
-
-        if len(multiple_scrobbles) > 0:
-            print("Double dippers!:")
-            for song, count in multiple_scrobbles.items():
-                print(f"{song}: {count} times")
-        new_line()
-    else:
-        print("No scrobbles during this session.")
-        new_line()
-
-
-async def check_pending_scrobbles() -> None:
-    if await internet() and len(pending_scrobbles) > 0:
-        count = 0
-        for track in pending_scrobbles:
-            scrobbled_track = await lastfm.scrobble(track)
-            if scrobbled_track:
-                session_scrobbles.append(scrobbled_track)
-                count += 1
-        logger.info(f"Scrobbled {count} pending track(s)...")
-    elif len(pending_scrobbles) == 0:
-        logger.info("No pending scrobbles.")
-    else:
-        logger.info(f"No internet connection. Skipping {len(pending_scrobbles)} pending scrobble(s)...")
-
-
 async def stop() -> None:
     global loop
     new_line()
 
-    await check_pending_scrobbles()
+    await session.process_pending_scrobbles()
     new_line()
 
-    await log_session_scrobbles()
+    print(session.get_session_summary())
 
     print(bar)
     print("Thank you for scrobbling. Bye.")
