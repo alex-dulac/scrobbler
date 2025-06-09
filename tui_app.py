@@ -4,8 +4,6 @@ from textual.containers import Container
 from textual import work
 from textual.reactive import reactive
 from rich.text import Text
-from rich.console import RenderableType
-from rich.progress import Progress, BarColumn, TextColumn
 
 from models.integrations import Integration
 from models.session import SessionScrobbles
@@ -13,99 +11,8 @@ from models.track import Track
 from service.apple_music_service import poll_apple_music
 from service.spotify_service import SpotifyService
 from service.lastfm_service import LastFmService
+from widgets import SongInfoWidget, ScrobbleProgressBar, SessionInfoWidget, ScrobbleHistoryWidget, css
 from utils import poll_comparison, internet
-
-css = """
-    #song-info {
-        height: 3;
-        content-align: center middle;
-        margin: 1 0;
-    }
-    #scrobble-progress {
-        height: 1;
-        margin: 2 2;
-        width: 100%;
-        content-align: center middle;
-    }
-    #controls {
-        layout: horizontal;
-        height: 3;
-        align: center middle;
-        margin-top: 1;
-    }
-    Button {
-        margin: 0 1;
-    }
-    .active-button {
-        background: $accent;
-    }
-    """
-
-class SongInfoWidget(Static):
-    """Custom widget to display song information with rich formatting."""
-    def render(self) -> RenderableType:
-        return self.renderable
-
-
-class ScrobbleProgressBar(Static):
-    def __init__(self, id=None):
-        super().__init__(id=id)
-        self.progress = 0.0
-        self.progress_bar = Progress(
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%", justify="right"),
-            BarColumn(bar_width=None),
-            TextColumn("{task.description}", justify="left"),
-            expand=True
-        )
-        self.task_id = self.progress_bar.add_task("", total=100, completed=0)
-
-    def update_progress(self, value, description=""):
-        """Update progress value (0-1) and description."""
-        percentage = min(100, max(0, int(value * 100)))
-        self.progress = value
-        self.progress_bar.update(self.task_id, completed=percentage, description=description)
-        self.update(self.progress_bar)
-
-
-class SessionInfoWidget(Static):
-    """Widget to display session information."""
-    def __init__(self, session: SessionScrobbles, id=None):
-        super().__init__(id=id)
-        self.session = session
-        self.update_session_info()
-
-    def update_session_info(self):
-        """Update the session information display."""
-        if not self.session or len(self.session) == 0:
-            self.update("No scrobbles in this session yet.")
-            return
-
-        text = Text()
-        text.append(f"Session Scrobbles: {self.session.count}\n", style="bold green")
-
-        # Show top artists
-        artist_counts = self.session.get_artist_counts()
-        if artist_counts:
-            top_artists = sorted(artist_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-            text.append("Top Artists: ", style="bold")
-            for i, (artist, count) in enumerate(top_artists):
-                text.append(f"{artist} ({count})", style="cyan")
-                if i < len(top_artists) - 1:
-                    text.append(", ")
-            text.append("\n")
-
-        # Show multiple scrobbles
-        multiple = self.session.get_multiple_scrobbles()
-        if multiple:
-            text.append("Repeat Scrobbles: ", style="bold")
-            for i, (song, count) in enumerate(list(multiple.items())[:3]):
-                text.append(f"{song} ({count}×)", style="yellow")
-                if i < min(len(multiple) - 1, 2):
-                    text.append(", ")
-            if len(multiple) > 3:
-                text.append(f" and {len(multiple) - 3} more...")
-
-        self.update(text)
 
 
 class ScrobblerApp(App):
@@ -126,10 +33,12 @@ class ScrobblerApp(App):
             Button("Apple Music", id="apple-music", classes="active-button"),
             Button("Spotify", id="spotify"),
             Button("Process Pending", id="process-pending"),
+            Button("Quit", id="quit", variant="error"),
             id="controls"
         )
         yield SongInfoWidget(id="song-info")
         yield ScrobbleProgressBar(id="scrobble-progress")
+        yield ScrobbleHistoryWidget(id="scrobble-history")
         yield SessionInfoWidget(self.session, id="session-info")
         yield Static(id="scrobble-stats")
         yield Footer()
@@ -139,6 +48,15 @@ class ScrobblerApp(App):
         self.query_one(SongInfoWidget).update("Waiting for music...")
         self.query_one(ScrobbleProgressBar).update_progress(0, "Waiting for music...")
         self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
+        self.query_one(ScrobbleHistoryWidget).update("Waiting for music...")
+
+    @work
+    async def action_quit(self) -> None:
+        """Quit the application after processing any pending scrobbles."""
+        self.notify("Thank you for scrobbling. Goodbye!")
+        if self.session.pending:
+            await self.session.process_pending_scrobbles()
+        self.exit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "apple-music":
@@ -153,6 +71,8 @@ class ScrobblerApp(App):
             self.query_one("#apple-music").remove_class("active-button")
         elif event.button.id == "process-pending":
             self.process_pending_scrobbles()
+        elif event.button.id == "quit":
+            self.action_quit()
 
     @work
     async def process_pending_scrobbles(self):
@@ -170,7 +90,8 @@ class ScrobblerApp(App):
 
         self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
 
-    def format_song_info(self, song, status=""):
+    @staticmethod
+    def format_song_info(song, status=""):
         """Format song information with rich styling."""
         text = Text()
 
@@ -185,6 +106,7 @@ class ScrobblerApp(App):
 
         return text
 
+    @staticmethod
     def format_progress_info(self, current_time, threshold):
         """Format the progress information text."""
         percentage = min(100, int((current_time / threshold) * 100))
@@ -196,7 +118,6 @@ class ScrobblerApp(App):
         poll: Track = await poll_service()
         compare = await poll_comparison(poll, self.current_song, None)
 
-        # Update the subtitle to show active service and scrobble count
         self.sub_title = f"{self.active_service} | Scrobbles: {self.session.count}"
         self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
 
@@ -205,13 +126,16 @@ class ScrobblerApp(App):
                 self.current_song = None
             self.query_one(SongInfoWidget).update("No song playing")
             self.query_one(ScrobbleProgressBar).update_progress(0, "No song playing")
+            self.query_one(ScrobbleHistoryWidget).update("No song playing")
             return
 
         if compare.update_song:
             self.current_song = poll
             self.current_song.time_played = 0
-            if compare.update_lastfm_now_playing and await internet():
-                self.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.current_song)
+            if await internet():
+                await self.query_one(ScrobbleHistoryWidget).update_history(self.lastfm, self.current_song)
+                if compare.update_lastfm_now_playing:
+                    self.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.current_song)
 
         if compare.update_song_playing_status:
             self.current_song.playing = poll.playing

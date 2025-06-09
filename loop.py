@@ -7,7 +7,7 @@ from loguru import logger
 
 from models.integrations import Integration
 from models.session import SessionScrobbles
-from models.track import AppleMusicTrack, SpotifyTrack, LastFmTrack, Track
+from models.track import AppleMusicTrack, SpotifyTrack, Track
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import LastFmService
 from service.spotify_service import SpotifyService
@@ -18,7 +18,6 @@ loop = True
 active_integration = Integration.APPLE_MUSIC
 lastfm = LastFmService()
 spotify = SpotifyService()
-scrobble_count = 0
 session = SessionScrobbles(lastfm)
 
 
@@ -58,7 +57,6 @@ async def run() -> None:
     manages Last.fm integration, and monitors playback.
     It's designed to keep track of what's playing and handle scrobbling to Last.fm when appropriate.
     """
-    global scrobble_count
     current_song = None
     poll_service = None
 
@@ -120,8 +118,7 @@ async def run() -> None:
                         session.add_scrobble(scrobbled_track)
                         session.remove_pending(current_song)
                         current_song.scrobbled = True
-                        scrobble_count += 1
-                        logger.info(f"Scrobble Count: {scrobble_count}")
+                        logger.info(f"Scrobble Count: {session.count}")
                         display_status = scrobbled
 
         print(display_status, end="\r")

@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import List, Dict, Optional
+from typing import List, Dict
 from loguru import logger
 
 from models.track import Track, LastFmTrack
@@ -11,7 +11,6 @@ class SessionScrobbles:
     Manages the collection of scrobbled tracks and pending scrobbles during a session.
     Provides methods for adding, retrieving, and analyzing scrobble data.
     """
-
     def __init__(self, lastfm_service: LastFmService):
         self.scrobbles: List[LastFmTrack] = []
         self.pending: List[Track] = []
@@ -40,7 +39,7 @@ class SessionScrobbles:
         Process all pending scrobbles if internet is available.
         Returns the number of successfully processed scrobbles.
         """
-        from utils import internet  # Import here to avoid circular imports
+        from utils import internet
 
         if not await internet() or not self.pending:
             if not await internet():
@@ -50,7 +49,7 @@ class SessionScrobbles:
             return 0
 
         processed_count = 0
-        pending_copy = self.pending.copy()  # Create a copy to safely iterate and modify
+        pending_copy = self.pending.copy()
 
         for track in pending_copy:
             scrobbled_track = await self.lastfm.scrobble(track)
