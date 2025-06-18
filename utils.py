@@ -106,14 +106,15 @@ def clean_up_title(title: str) -> str:
     Returns:
         str: The cleaned up title.
     """
+    filter_words = {
+        'remaster', 'bonus', 'extended', 'anniversary', 'edit', 'deluxe',
+    }
 
-    # Remove substrings in parentheses or brackets containing undesired detail (case-insensitive)...
-    clean_title = re.sub(r'[\(\[][^)\]]*remaster[^)\]]*[\)\]]', '', title, flags=re.IGNORECASE).strip()
-    clean_title = re.sub(r'[\(\[][^)\]]*bonus[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
-    clean_title = re.sub(r'[\(\[][^)\]]*extended[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
-    clean_title = re.sub(r'[\(\[][^)\]]*anniversary[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
-    clean_title = re.sub(r'[\(\[][^)\]]*edit[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
-    clean_title = re.sub(r'[\(\[][^)\]]*deluxe[^)\]]*[\)\]]', '', clean_title, flags=re.IGNORECASE).strip()
+    pattern = r'\([^)]*(?:{})[^)]*\)|\[[^]]*(?:{})[^]]*\]'.format(
+        '|'.join(filter_words), '|'.join(filter_words)
+    )
+
+    clean_title = re.sub(pattern, '', title, flags=re.IGNORECASE).strip()
 
     return clean_title
 
