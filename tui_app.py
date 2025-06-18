@@ -40,14 +40,12 @@ class ScrobblerApp(App):
         yield ScrobbleProgressBar(id="scrobble-progress")
         yield ScrobbleHistoryWidget(id="scrobble-history")
         yield SessionInfoWidget(self.session, id="session-info")
-        yield Static(id="scrobble-stats")
         yield Footer()
 
     def on_mount(self):
         self.set_interval(1, self.update_display)
         self.query_one(SongInfoWidget).update("Waiting for music...")
         self.query_one(ScrobbleProgressBar).update_progress(0, "Waiting for music...")
-        self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
         self.query_one(ScrobbleHistoryWidget).update("Waiting for music...")
 
     @work
@@ -88,8 +86,6 @@ class ScrobblerApp(App):
         else:
             self.notify("Failed to process pending scrobbles")
 
-        self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
-
     @staticmethod
     def format_song_info(song, status=""):
         """Format song information with rich styling."""
@@ -119,7 +115,6 @@ class ScrobblerApp(App):
         compare = await poll_comparison(poll, self.current_song, None)
 
         self.sub_title = f"{self.active_service} | Scrobbles: {self.session.count}"
-        self.query_one("#scrobble-stats").update(f"Pending scrobbles: {len(self.session.pending)}")
 
         if compare.no_song_playing:
             if self.current_song:

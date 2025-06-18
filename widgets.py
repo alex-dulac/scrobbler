@@ -154,29 +154,26 @@ class SessionInfoWidget(Static):
             self.update("No scrobbles in this session yet.")
             return
 
-        text = Text()
-        text.append(f"Session Scrobbles: {self.session.count}\n", style="bold green")
+        table = Table(title="Session Information", width=100)
+        table.add_column("Category", style="cyan", width=20)
+        table.add_column("Information", style="green")
 
-        # Show top artists
+        table.add_row("Total Scrobbles", str(self.session.count))
+
         artist_counts = self.session.get_artist_counts()
         if artist_counts:
             top_artists = sorted(artist_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-            text.append("Top Artists: ", style="bold")
-            for i, (artist, count) in enumerate(top_artists):
-                text.append(f"{artist} ({count})", style="cyan")
-                if i < len(top_artists) - 1:
-                    text.append(", ")
-            text.append("\n")
+            top_artists_str = ", ".join([f"{artist} ({count})" for artist, count in top_artists])
+            table.add_row("Top Artists", top_artists_str)
 
-        # Show multiple scrobbles
         multiple = self.session.get_multiple_scrobbles()
         if multiple:
-            text.append("Repeat Scrobbles: ", style="bold")
-            for i, (song, count) in enumerate(list(multiple.items())[:3]):
-                text.append(f"{song} ({count}×)", style="yellow")
-                if i < min(len(multiple) - 1, 2):
-                    text.append(", ")
+            multiple_str = ", ".join([f"{song} ({count}×)" for song, count in list(multiple.items())[:3]])
             if len(multiple) > 3:
-                text.append(f" and {len(multiple) - 3} more...")
+                multiple_str += f" and {len(multiple) - 3} more..."
+            table.add_row("Repeat Scrobbles", multiple_str)
 
-        self.update(text)
+        if self.session.pending:
+            table.add_row("Pending Scrobbles", str(len(self.session.pending)))
+
+        self.update(table)
