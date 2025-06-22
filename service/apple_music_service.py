@@ -57,6 +57,76 @@ async def poll_apple_music() -> AppleMusicTrack | None:
         return None
 
 
+async def control_playback(action: str) -> bool:
+    """
+    Control Apple Music playback.
+    :param action: One of 'play', 'pause', 'playpause', 'next', 'previous'
+    :return: True if successful, False otherwise
+    """
+    script = f"""
+    tell application "Music"
+        if it is running then
+            {action}
+            return true
+        else
+            return false
+        end if
+    end tell
+    """
+    try:
+        result = AppleScript(script).run()
+        return result
+    except ScriptError as e:
+        await handle_applescript_error(e)
+        return False
+
+
+async def set_volume(volume: int) -> bool:
+    """
+    Set the volume of Apple Music.
+    :param volume: Integer between 0 and 100
+    :return: True if successful, False otherwise
+    """
+    script = f"""
+    tell application "Music"
+        if it is running then
+            set sound volume to {volume}
+            return true
+        else
+            return false
+        end if
+    end tell
+    """
+    try:
+        result = AppleScript(script).run()
+        return result
+    except ScriptError as e:
+        await handle_applescript_error(e)
+        return False
+
+
+async def get_volume() -> int:
+    """
+    Get the current volume of Apple Music.
+    :return: Volume as an integer between 0 and 100, or -1 if an error occurred
+    """
+    script = """
+    tell application "Music"
+        if it is running then
+            return sound volume
+        else
+            return -1
+        end if
+    end tell
+    """
+    try:
+        result = AppleScript(script).run()
+        return result
+    except ScriptError as e:
+        await handle_applescript_error(e)
+        return -1
+
+
 async def get_current_track_artwork_data() -> str | None:
     script = """
     tell application "Music"
@@ -79,7 +149,7 @@ async def get_current_track_artwork_data() -> str | None:
             return base64.b64encode(artwork_bytes).decode('utf-8')
         else:
             return None
-    except applescript.ScriptError as e:
+    except ScriptError as e:
         await handle_applescript_error(e)
 
 

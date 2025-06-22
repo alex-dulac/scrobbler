@@ -47,6 +47,12 @@ class ScrobblerApp(App):
             Button("Quit", id="quit", variant="error"),
             id="controls"
         )
+        yield Container(
+            Button("⏯", id="play-pause"),
+            Button("⏮", id="previous-track"),
+            Button("⏭", id="next-track"),
+            id="playback-controls"
+        )
         yield widgets.SongInfoWidget(id="song-info")
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
         yield widgets.ScrobbleHistoryWidget(id="scrobble-history")
@@ -91,6 +97,20 @@ class ScrobblerApp(App):
             self.process_pending_scrobbles()
         elif event.button.id == "quit":
             self.action_quit()
+        elif event.button.id == "play-pause":
+            self.playback_control("playpause")
+        elif event.button.id == "previous-track":
+            self.playback_control("previous track")
+        elif event.button.id == "next-track":
+            self.playback_control("next track")
+
+    @work
+    async def playback_control(self, action: str):
+        if self.active_integration == Integration.APPLE_MUSIC:
+            from service.apple_music_service import control_playback
+            await control_playback(action)
+        elif self.active_integration == Integration.SPOTIFY:
+            self.notify("Spotify playback control not implemented yet")
 
     @work
     async def process_pending_scrobbles(self):

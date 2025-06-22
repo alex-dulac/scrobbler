@@ -29,6 +29,12 @@ css = """
         align: center middle;
         margin-top: 1;
     }
+    #playback-controls {
+        layout: horizontal;
+        height: 3;
+        align: center middle;
+        margin-top: 1;
+    }
     #scrobble-history-container {
         height: auto;
         min-height: 10;
