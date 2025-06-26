@@ -107,7 +107,13 @@ def clean_up_title(title: str) -> str:
         str: The cleaned up title.
     """
     filter_words = {
-        'remaster', 'bonus', 'extended', 'anniversary', 'edit', 'deluxe',
+        'remaster',
+        'bonus',
+        'extended',
+        'anniversary',
+        'edit',
+        'deluxe',
+        'reissue'
     }
 
     pattern = r'\([^)]*(?:{})[^)]*\)|\[[^]]*(?:{})[^]]*\]'.format(

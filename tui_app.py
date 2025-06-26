@@ -1,3 +1,5 @@
+import asyncio
+import time
 from enum import EnumType
 
 from textual.app import App, ComposeResult
@@ -8,10 +10,10 @@ from textual import work
 from textual.reactive import reactive
 from rich.text import Text
 
-from models.integrations import Integration
+from models.integrations import Integration, PlaybackAction
 from models.session import SessionScrobbles
 from models.track import Track
-from service.apple_music_service import poll_apple_music
+from service.apple_music_service import poll_apple_music, playback_control
 from service.spotify_service import SpotifyService
 from service.lastfm_service import LastFmService
 import widgets
@@ -78,8 +80,12 @@ class ScrobblerApp(App):
     async def action_quit(self) -> None:
         """Quit the application after processing any pending scrobbles."""
         self.notify("Thank you for scrobbling. Goodbye!")
+
         if self.session.pending:
-            await self.session.process_pending_scrobbles()
+            count = await self.session.process_pending_scrobbles()
+            self.notify(f"Processed {count} pending scrobbles.")
+
+        await asyncio.sleep(2)
         self.exit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -98,19 +104,20 @@ class ScrobblerApp(App):
         elif event.button.id == "quit":
             self.action_quit()
         elif event.button.id == "play-pause":
-            self.playback_control("playpause")
+            self.playback_control(PlaybackAction.PAUSE)
         elif event.button.id == "previous-track":
-            self.playback_control("previous track")
+            self.playback_control(PlaybackAction.PREVIOUS)
         elif event.button.id == "next-track":
-            self.playback_control("next track")
+            self.playback_control(PlaybackAction.NEXT)
 
     @work
-    async def playback_control(self, action: str):
+    async def playback_control(self, action: PlaybackAction):
         if self.active_integration == Integration.APPLE_MUSIC:
-            from service.apple_music_service import control_playback
-            await control_playback(action)
+            await playback_control(action)
         elif self.active_integration == Integration.SPOTIFY:
-            self.notify("Spotify playback control not implemented yet")
+            result = await self.spotify.playback_control(action)
+            if result is False:
+                self.notify("Failed to control playback. Spotify Premium required.")
 
     @work
     async def process_pending_scrobbles(self):

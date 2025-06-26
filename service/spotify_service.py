@@ -3,9 +3,18 @@ from spotipy.oauth2 import SpotifyOAuth
 
 from config import settings
 from models.artist import SpotifyArtist
+from models.integrations import PlaybackAction
 from models.track import SpotifyTrack
 from models.user import SpotifyUser
 from utils import clean_up_title
+
+scope = [
+    'user-read-playback-state',
+    'user-modify-playback-state',
+    'user-read-currently-playing',
+    'user-read-private',
+    'app-remote-control',
+]
 
 
 class SpotifyService:
@@ -14,7 +23,7 @@ class SpotifyService:
             client_id=settings.SPOTIFY_CLIENT_ID,
             client_secret=settings.SPOTIFY_CLIENT_SECRET,
             redirect_uri=settings.SPOTIFY_REDIRECT_URI,
-            scope=['user-read-playback-state', 'user-modify-playback-state', 'user-read-currently-playing']
+            scope=scope
         )
         self.spotify = spotipy.Spotify(auth_manager=auth)
 
@@ -26,7 +35,8 @@ class SpotifyService:
             return SpotifyUser(
                 name=result['display_name'],
                 url=url,
-                images=result['images']
+                images=result['images'],
+                product=result['product'],
             )
         else:
             return None
@@ -52,6 +62,24 @@ class SpotifyService:
             )
         else:
             return None
+
+
+    async def playback_control(self, action: PlaybackAction, position_ms: int | None = None):
+        user = await self.get_spotify_account_information()
+        if user.is_free():
+            return False  # Free accounts cannot control playback
+
+        match action:
+            case PlaybackAction.PAUSE:
+                return self.spotify.pause_playback()
+            case PlaybackAction.NEXT:
+                return self.spotify.next_track()
+            case PlaybackAction.PREVIOUS:
+                return self.spotify.previous_track()
+            case PlaybackAction.SEEK:
+                return self.spotify.seek_track(position_ms=position_ms)
+            case _:
+                raise ValueError(f"Invalid playback action: {action}")
 
 
     async def get_artist_from_name(self, artist_name: str) -> SpotifyArtist:

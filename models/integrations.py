@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, EnumType
 
 
 class Integration(Enum):
@@ -14,3 +14,10 @@ class Integration(Enum):
             Integration.SPOTIFY: 'Spotify'
         }
         return names.get(self, self.name)
+
+
+class PlaybackAction(EnumType):
+    PAUSE = 'pause'
+    NEXT = 'next'
+    PREVIOUS = 'previous'
+    SEEK = 'seek'

@@ -17,17 +17,17 @@ async def user():
 
 
 @user_router.get("/user/accounts/lastfm")
-async def user():
+async def user_lastfm():
     return {"user": await get_lastfm_account_details()}
 
 
 @user_router.get("/user/accounts/apple/")
-async def user():
+async def user_mac_os():
     return {"mac_os": await get_macos_information()}
 
 
 @user_router.get("/user/accounts/spotify/")
-async def user():
+async def user_spotify():
     return {"spotify_account": await spotify.get_spotify_account_information()}
 
 

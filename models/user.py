@@ -40,9 +40,17 @@ class SpotifyUser(User):
             name: str,
             images: list,
             url: str,
+            product: str,
     ):
         super().__init__(name, url)
         self.images = images
+        self.product = product
+
+    def is_premium(self) -> bool:
+        return self.product == "premium"
+
+    def is_free(self) -> bool:
+        return self.product == "free"
 
 
 class AppleMusicUser(User):

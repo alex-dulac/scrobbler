@@ -3,6 +3,7 @@ import base64
 from applescript import AppleScript, AEType, kae, ScriptError
 from loguru import logger
 
+from models.integrations import PlaybackAction
 from models.mac_os import MacOSSystemInfo
 from models.track import AppleMusicTrack
 from utils import clean_up_title
@@ -57,16 +58,24 @@ async def poll_apple_music() -> AppleMusicTrack | None:
         return None
 
 
-async def control_playback(action: str) -> bool:
+async def playback_control(action: PlaybackAction) -> bool:
     """
     Control Apple Music playback.
-    :param action: One of 'play', 'pause', 'playpause', 'next', 'previous'
-    :return: True if successful, False otherwise
     """
+    match action:
+        case PlaybackAction.PAUSE:
+            applescript_command = "playpause"
+        case PlaybackAction.NEXT:
+            applescript_command = "next track"
+        case PlaybackAction.PREVIOUS:
+            applescript_command = "previous track"
+        case _:
+            raise ValueError(f"Invalid playback action: {action}")
+
     script = f"""
     tell application "Music"
         if it is running then
-            {action}
+            {applescript_command}
             return true
         else
             return false

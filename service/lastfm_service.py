@@ -69,23 +69,15 @@ class LastFmService:
             username=LASTFM_USERNAME,
             password_hash=LASTFM_PASSWORD_HASH
         )
-
-
-    async def get_user(self) -> pylast.User:
-        return self.network.get_user(settings.LASTFM_USERNAME)
-
+        self.user = self.network.get_user(LASTFM_USERNAME)
 
     async def get_user_playcount(self) -> str:
-        user = await self.get_user()
-        playcount = user.get_playcount()
+        playcount = self.user.get_playcount()
         playcount = format(playcount, ',')
         return playcount
 
-
     async def get_user_recent_tracks(self) -> list[list[LastFmTrack | LastFmAlbum | None]]:
-        user = await self.get_user()
-
-        recent_tracks = user.get_recent_tracks(limit=20)
+        recent_tracks = self.user.get_recent_tracks(limit=20)
         tracks = []
         for track in recent_tracks:
             scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
@@ -104,11 +96,8 @@ class LastFmService:
 
         return tracks
 
-
     async def get_user_loved_tracks(self) -> list[LastFmTrack]:
-        user = await self.get_user()
-
-        loved_tracks = user.get_loved_tracks()
+        loved_tracks = self.user.get_loved_tracks()
         tracks = []
         for track in loved_tracks:
             loved_at = datetime.fromtimestamp(int(track.timestamp))
@@ -121,11 +110,8 @@ class LastFmService:
 
         return tracks
 
-
     async def get_user_top_artists(self) -> list[LastFmTopItem]:
-        user = await self.get_user()
-
-        top_artists = user.get_top_artists(limit=10)
+        top_artists = self.user.get_top_artists(limit=10)
         artists = []
         for artist in top_artists:
             details = artist.item
@@ -143,11 +129,8 @@ class LastFmService:
 
         return artists
 
-
     async def get_user_top_albums(self) -> list[LastFmTopItem]:
-        user = await self.get_user()
-
-        top_albums = user.get_top_albums(limit=10)
+        top_albums = self.user.get_top_albums(limit=10)
         albums = []
         for album in top_albums:
             details = album.item
@@ -166,7 +149,6 @@ class LastFmService:
 
         return albums
 
-
     async def update_now_playing(self, current_song: Track) -> bool:
         try:
             self.network.update_now_playing(
@@ -179,7 +161,6 @@ class LastFmService:
         except pylast.PyLastError as e:
             logger.error(f"Failed to update Last.fm now playing: {e}")
             return False
-
 
     async def scrobble(self, current_song: Track) -> LastFmTrack | None:
         artist = current_song.artist
@@ -207,7 +188,6 @@ class LastFmService:
             except pylast.PyLastError as e:
                 logger.error(f"Failed to scrobble to Last.fm: {e}")
                 return None
-
 
     async def get_album_image_url(self, album: pylast.Album) -> str | None:
         """
@@ -240,7 +220,6 @@ class LastFmService:
 
         return image_url
 
-
     async def get_album(self, title: str, artist: str) -> LastFmAlbum | None:
         album = self.network.get_album(title=title, artist=artist)
 
@@ -256,16 +235,14 @@ class LastFmService:
         else:
             return None
 
-
     async def current_track_user_scrobbles(self, current_song: Track) -> bool | list[LastFmTrack]:
-        user = await self.get_user()
         tracks = []
 
         try:
             # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
-            track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.name)
+            track_scrobbles = self.user.get_track_scrobbles(current_song.artist, current_song.name)
             if current_song.has_clean_name():
-                clean_track_scrobbles = user.get_track_scrobbles(current_song.artist, current_song.clean_name)
+                clean_track_scrobbles = self.user.get_track_scrobbles(current_song.artist, current_song.clean_name)
                 track_scrobbles.extend(clean_track_scrobbles)
 
             for t in track_scrobbles:
@@ -285,15 +262,11 @@ class LastFmService:
 
         return tracks
 
-
     async def user_weekly_chart_dates(self):
-        user = await self.get_user()
-        return user.get_weekly_chart_dates()
-
+        return self.user.get_weekly_chart_dates()
 
     async def user_weekly_album_charts(self, from_date: str, to_date: str):
-        user = await self.get_user()
-        weekly_albums = user.get_weekly_album_charts(from_date, to_date)
+        weekly_albums = self.user.get_weekly_album_charts(from_date, to_date)
 
         results = []
         for album, playcount in weekly_albums:
@@ -306,14 +279,11 @@ class LastFmService:
 
         return results
 
-
     async def get_user_30_day_stats(self):
-        user = await self.get_user()
-
         thirty_days_ago = int((datetime.now() - timedelta(days=30)).timestamp())
         now = int(datetime.now().timestamp())
 
-        recent_tracks = user.get_recent_tracks(limit=None, time_from=thirty_days_ago, time_to=now)
+        recent_tracks = self.user.get_recent_tracks(limit=None, time_from=thirty_days_ago, time_to=now)
         daily_stats = defaultdict(lambda: {"tracks": set(), "artists": set(), "albums": set()})
 
         for track in recent_tracks:
