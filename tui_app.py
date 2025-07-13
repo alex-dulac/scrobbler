@@ -1,5 +1,4 @@
 import asyncio
-import time
 from enum import EnumType
 
 from textual.app import App, ComposeResult
@@ -7,7 +6,6 @@ from textual.visual import VisualType
 from textual.widgets import Header, Footer, Button
 from textual.containers import Container
 from textual import work
-from textual.reactive import reactive
 from rich.text import Text
 
 from models.integrations import Integration, PlaybackAction
@@ -30,7 +28,6 @@ class ScrobbleStatus(EnumType):
 
 class ScrobblerApp(App):
     CSS = widgets.css
-    active_service = reactive("Apple Music")
 
     def __init__(self):
         super().__init__()
@@ -39,21 +36,30 @@ class ScrobblerApp(App):
         self.spotify = SpotifyService()
         self.current_song = None
         self.session = SessionScrobbles(self.lastfm)
+        self.current_view = "scrobble-history"
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Container(
             Button("Apple Music", id="apple-music", classes="active-button"),
             Button("Spotify", id="spotify"),
-            Button("Process Pending", id="process-pending"),
+            Button("History", id="toggle-view"),
             Button("Quit", id="quit", variant="error"),
+            classes="controls",
             id="controls"
         )
         yield Container(
             Button("⏯", id="play-pause"),
             Button("⏮", id="previous-track"),
             Button("⏭", id="next-track"),
+            classes="controls",
             id="playback-controls"
+        )
+        yield Container(
+            Button("Scrobble History", id="show-history"),
+            Button("Session", id="show-session"),
+            classes="controls",
+            id="view-controls"
         )
         yield widgets.SongInfoWidget(id="song-info")
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
@@ -75,6 +81,19 @@ class ScrobblerApp(App):
         self.update_song_info(ScrobbleStatus.WAITING)
         self.update_progress_bar(0, ScrobbleStatus.WAITING)
         self.query_one(widgets.ScrobbleHistoryWidget).update(ScrobbleStatus.WAITING)
+        self.update_view_visibility()
+
+    def update_view_visibility(self):
+        """Toggle visibility between widgets."""
+        history_widget = self.query_one("#scrobble-history")
+        session_widget = self.query_one("#session-info")
+
+        if self.current_view == "scrobble-history":
+            history_widget.display = True
+            session_widget.display = False
+        elif self.current_view == "session-info":
+            history_widget.display = False
+            session_widget.display = True
 
     @work
     async def action_quit(self) -> None:
@@ -89,20 +108,25 @@ class ScrobblerApp(App):
         self.exit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        # main
         if event.button.id == "apple-music":
             self.active_integration = Integration.APPLE_MUSIC
-            self.active_service = "Apple Music"
             self.query_one("#apple-music").add_class("active-button")
             self.query_one("#spotify").remove_class("active-button")
         elif event.button.id == "spotify":
             self.active_integration = Integration.SPOTIFY
-            self.active_service = "Spotify"
             self.query_one("#spotify").add_class("active-button")
             self.query_one("#apple-music").remove_class("active-button")
-        elif event.button.id == "process-pending":
-            self.process_pending_scrobbles()
         elif event.button.id == "quit":
             self.action_quit()
+        # views
+        elif event.button.id == "show-history":
+            self.current_view = "scrobble-history"
+            self.update_view_visibility()
+        elif event.button.id == "show-session":
+            self.current_view = "session-info"
+            self.update_view_visibility()
+        # playback
         elif event.button.id == "play-pause":
             self.playback_control(PlaybackAction.PAUSE)
         elif event.button.id == "previous-track":
@@ -118,20 +142,6 @@ class ScrobblerApp(App):
             result = await self.spotify.playback_control(action)
             if result is False:
                 self.notify("Failed to control playback. Spotify Premium required.")
-
-    @work
-    async def process_pending_scrobbles(self):
-        """Process any pending scrobbles."""
-        if not self.session.pending:
-            self.notify("No pending scrobbles to process")
-            return
-
-        count = await self.session.process_pending_scrobbles()
-        if count > 0:
-            self.notify(f"Processed {count} pending scrobbles")
-            self.update_session_info()
-        else:
-            self.notify("Failed to process pending scrobbles")
 
     @staticmethod
     def format_song_info(song, status=""):
@@ -149,7 +159,7 @@ class ScrobblerApp(App):
 
     @work
     async def update_display(self):
-        self.sub_title = f"{self.active_service} | Scrobbles: {self.session.count}"
+        self.sub_title = f"{self.active_integration.normalized_name()} | Scrobbles: {self.session.count}"
 
         poll_service = poll_apple_music if self.active_integration == Integration.APPLE_MUSIC else self.spotify.poll_spotify
         poll: Track = await poll_service()

@@ -3,7 +3,6 @@ from datetime import datetime
 from rich.console import RenderableType
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
-from rich.text import Text
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
@@ -23,13 +22,7 @@ css = """
         width: 100%;
         content-align: center middle;
     }
-    #controls {
-        layout: horizontal;
-        height: 3;
-        align: center middle;
-        margin-top: 1;
-    }
-    #playback-controls {
+    .controls {
         layout: horizontal;
         height: 3;
         align: center middle;
