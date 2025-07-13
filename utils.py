@@ -1,6 +1,6 @@
 import re
-import socket
 
+import aiohttp
 from loguru import logger
 
 from api.state import AppState
@@ -125,17 +125,23 @@ def clean_up_title(title: str) -> str:
     return clean_title
 
 
-async def internet(host="8.8.8.8", port=53, timeout=3):
+async def internet(timeout=3):
     """
-    Host: 8.8.8.8 (google-public-dns-a.google.com)
-    OpenPort: 53/tcp
-    Service: domain (DNS/TCP)
-    https://stackoverflow.com/a/33117579
+    Check internet connectivity by making HTTP requests to reliable endpoints.
     """
-    try:
-        socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-        return True
-    except socket.error:
-        return False
+    test_urls = [
+        "https://httpbin.org/status/200",
+        "https://www.google.com"
+    ]
+
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+        for url in test_urls:
+            try:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return True
+            except Exception:
+                continue
+
+    return False
 
