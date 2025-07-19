@@ -155,8 +155,6 @@ class ScrobblerApp(App):
 
     @work
     async def update_display(self):
-        self.sub_title = f"{self.active_integration.normalized_name()} | Scrobbles: {self.session.count}"
-
         poll_service = poll_apple_music if self.active_integration == Integration.APPLE_MUSIC else self.spotify.poll_spotify
         poll: Track = await poll_service()
         compare: Comparison = await poll_comparison(poll, self.current_song, None)

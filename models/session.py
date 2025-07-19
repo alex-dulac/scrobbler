@@ -4,6 +4,7 @@ from loguru import logger
 
 from models.track import Track, LastFmTrack
 from service.lastfm_service import LastFmService
+from utils import internet
 
 
 class SessionScrobbles:
@@ -18,19 +19,16 @@ class SessionScrobbles:
         self.count = 0
 
     def add_scrobble(self, track: LastFmTrack) -> None:
-        """Add a successfully scrobbled track to the session."""
         self.scrobbles.append(track)
         self.count += 1
         logger.info(f"Scrobble Count: {self.count}")
 
     def add_pending(self, track: Track) -> None:
-        """Add a track to the pending scrobbles list if not already present."""
         if track not in self.pending:
             self.pending.append(track)
             logger.info(f"Added track to pending scrobbles: {track.display_name()}")
 
     def remove_pending(self, track: Track) -> None:
-        """Remove a track from the pending scrobbles list if present."""
         if track in self.pending:
             self.pending.remove(track)
 
@@ -39,10 +37,10 @@ class SessionScrobbles:
         Process all pending scrobbles if internet is available.
         Returns the number of successfully processed scrobbles.
         """
-        from utils import internet
+        internet_available = await internet()
 
-        if not await internet() or not self.pending:
-            if not await internet():
+        if not internet_available or not self.pending:
+            if not internet_available:
                 logger.info(f"No internet connection. Skipping {len(self.pending)} pending scrobble(s)...")
             elif not self.pending:
                 logger.info("No pending scrobbles.")
