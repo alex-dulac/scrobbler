@@ -8,6 +8,8 @@ from textual.widgets import Static
 
 from config import settings
 from models.session import SessionScrobbles
+from models.track import Track
+from service.lastfm_service import LastFmService
 from utils import internet
 
 css = """
@@ -97,13 +99,13 @@ class ScrobbleHistoryWidget(ScrollableContainer):
         if hasattr(self, "content") and self.content.is_mounted:
             self.content.update(renderable)
 
-    async def update_history(self, lastfm_service, current_song):
+    async def update_history(self, lastfm_service: LastFmService, current_song: Track):
         """Update the scrobble history for the current song."""
         if not current_song:
             self.update("No song selected")
             return
 
-        if not internet():
+        if not await internet():
             self.update("No internet connection. Cannot load scrobble history...")
             return
 
