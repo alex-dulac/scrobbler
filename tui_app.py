@@ -36,11 +36,12 @@ class ScrobblerApp(App):
         self.spotify = SpotifyService()
         self.current_song = None
         self.session = SessionScrobbles(self.lastfm)
-        self.current_view = "scrobble-history"
+        self.current_view = "history-list"
         self.is_scrobbling = False # mitigate duplicate scrobbles
 
     def compose(self) -> ComposeResult:
         yield Header()
+        # playback controls
         yield Container(
             Button("Apple Music", id="apple-music", classes="active-button"),
             Button("Spotify", id="spotify"),
@@ -51,15 +52,20 @@ class ScrobblerApp(App):
             classes="controls",
             id="controls"
         )
+        # view controls
         yield Container(
-            Button("Scrobble History", id="show-history"),
+            Button("History List", id="show-history-list"),
+            Button("History Chart", id="show-history-chart"),
             Button("Session", id="show-session"),
             classes="controls",
             id="view-controls"
         )
+        # song info and progress bar
         yield widgets.SongInfoWidget(id="song-info")
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
-        yield widgets.ScrobbleHistoryWidget(id="scrobble-history")
+        # views
+        yield widgets.HistoryListWidget(id="history-list")
+        yield widgets.HistoryChartWidget(id="history-chart")
         yield widgets.SessionInfoWidget(self.session, id="session-info")
         yield Footer()
 
@@ -76,20 +82,26 @@ class ScrobblerApp(App):
         self.set_interval(1, self.update_display)
         self.update_song_info(ScrobbleStatus.WAITING)
         self.update_progress_bar(0, ScrobbleStatus.WAITING)
-        self.query_one(widgets.ScrobbleHistoryWidget).update(ScrobbleStatus.WAITING)
+        self.query_one(widgets.HistoryListWidget).update(ScrobbleStatus.WAITING)
         self.update_view_visibility()
 
     def update_view_visibility(self):
-        """Toggle visibility between widgets."""
-        history_widget = self.query_one("#scrobble-history")
-        session_widget = self.query_one("#session-info")
+        history_list = self.query_one("#history-list")
+        history_chart = self.query_one("#history-chart")
+        session = self.query_one("#session-info")
 
-        if self.current_view == "scrobble-history":
-            history_widget.display = True
-            session_widget.display = False
+        if self.current_view == "history-list":
+            history_list.display = True
+            history_chart.display = False
+            session.display = False
+        elif self.current_view == "history-chart":
+            history_list.display = False
+            history_chart.display = True
+            session.display = False
         elif self.current_view == "session-info":
-            history_widget.display = False
-            session_widget.display = True
+            history_list.display = False
+            history_chart.display = False
+            session.display = True
 
     @work
     async def action_quit(self) -> None:
@@ -116,8 +128,11 @@ class ScrobblerApp(App):
         elif event.button.id == "quit":
             self.action_quit()
         # views
-        elif event.button.id == "show-history":
-            self.current_view = "scrobble-history"
+        elif event.button.id == "show-history-list":
+            self.current_view = "history-list"
+            self.update_view_visibility()
+        elif event.button.id == "show-history-chart":
+            self.current_view = "history-chart"
             self.update_view_visibility()
         elif event.button.id == "show-session":
             self.current_view = "session-info"
@@ -141,7 +156,6 @@ class ScrobblerApp(App):
 
     @staticmethod
     def format_song_info(song, status=""):
-        """Format song information with rich styling."""
         text = Text()
         text.append(f"{song.name}\n", style="bold white")
         text.append(f"by ", style="dim")
@@ -157,20 +171,22 @@ class ScrobblerApp(App):
     async def update_display(self):
         poll_service = poll_apple_music if self.active_integration == Integration.APPLE_MUSIC else self.spotify.poll_spotify
         poll: Track = await poll_service()
-        compare: Comparison = await poll_comparison(poll, self.current_song, None)
+        compare: Comparison = await poll_comparison(poll, self.current_song)
 
         if compare.no_song_playing:
             if self.current_song:
                 self.current_song = None
             self.update_song_info(ScrobbleStatus.NOT_PLAYING)
-            self.query_one(widgets.ScrobbleHistoryWidget).update(ScrobbleStatus.NOT_PLAYING)
+            self.query_one(widgets.HistoryListWidget).update(ScrobbleStatus.NOT_PLAYING)
             self.update_progress_bar(0, ScrobbleStatus.NOT_PLAYING)
             return
 
         if compare.update_song:
             self.current_song = poll
             self.current_song.time_played = 0
-            await self.query_one(widgets.ScrobbleHistoryWidget).update_history(self.lastfm, self.current_song)
+            scrobbles = await self.lastfm.current_track_user_scrobbles(self.current_song)
+            self.query_one(widgets.HistoryListWidget).update_list(self.current_song, scrobbles)
+            self.query_one(widgets.HistoryChartWidget).update_chart(self.current_song, scrobbles)
             if compare.update_lastfm_now_playing:
                 self.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.current_song)
 

@@ -46,7 +46,7 @@ def is_same_song(poll: Track | None, current_song: Track | None) -> bool:
 async def poll_comparison(
         poll: Track | None,
         current_song: Track | None,
-        lastfm_album: LastFmAlbum | None
+        lastfm_album: LastFmAlbum | None = None
 ) -> Comparison:
     if not poll:
         return Comparison(no_song_playing=True)

@@ -69,7 +69,7 @@ async def run() -> None:
 
     while loop:
         poll = await poll_service()
-        compare = await poll_comparison(poll, current_song, None)
+        compare = await poll_comparison(poll, current_song)
 
         if compare.no_song_playing:
             if current_song:

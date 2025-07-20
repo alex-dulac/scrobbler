@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime
 
 from rich.console import RenderableType, Group
@@ -8,11 +9,12 @@ from textual.widgets import Static
 
 from config import settings
 from models.session import SessionScrobbles
-from models.track import Track
-from service.lastfm_service import LastFmService
-from utils import internet
+from models.track import Track, LastFmTrack
 
 css = """
+    Button {
+        margin: 0 1;
+    }
     #song-info {
         height: 3;
         content-align: center middle;
@@ -30,23 +32,9 @@ css = """
         align: center middle;
         margin-top: 1;
     }
-    #scrobble-history-container {
-        height: auto;
-        min-height: 10;
-        margin: 1 0;
-        border: solid $accent;
-        width: 100%;
-    }
-    #scrobble-history {
+    .content-container {
         padding: 1 2;
         width: 100%;
-    }
-    #session-info {
-        padding: 1 2;
-        width: 100%;
-    }
-    Button {
-        margin: 0 1;
     }
     .active-button {
         background: $accent;
@@ -78,16 +66,16 @@ class ScrobbleProgressBar(Static):
         self.update(self.progress_bar)
 
 
-class ScrobbleHistoryContent(Static):
+class HistoryContent(Static):
     def __init__(self, id=None):
         super().__init__(id=id)
         self.update("No song selected")
 
 
-class ScrobbleHistoryWidget(ScrollableContainer):
+class HistoryListWidget(ScrollableContainer):
     def __init__(self, id=None):
-        super().__init__(id=id or "scrobble-history-container")
-        self.content = ScrobbleHistoryContent(id="scrobble-history")
+        super().__init__(id=id, classes="content-container")
+        self.content = HistoryContent(id="history-list")
 
     def on_mount(self) -> None:
         self.mount(self.content)
@@ -97,18 +85,10 @@ class ScrobbleHistoryWidget(ScrollableContainer):
         if hasattr(self, "content") and self.content.is_mounted:
             self.content.update(renderable)
 
-    async def update_history(self, lastfm_service: LastFmService, current_song: Track):
+    def update_list(self, current_song: Track, scrobbles: list[LastFmTrack]):
         if not current_song:
             self.update("No song selected")
             return
-
-        if not await internet():
-            self.update("No internet connection. Cannot load scrobble history...")
-            return
-
-        self.update(f"Loading scrobble history for: {current_song.display_name()}...")
-
-        scrobbles = await lastfm_service.current_track_user_scrobbles(current_song)
 
         if scrobbles is False:
             self.update("Failed to load scrobble history")
@@ -139,9 +119,85 @@ class ScrobbleHistoryWidget(ScrollableContainer):
         self.update(table)
 
 
+class HistoryChartWidget(ScrollableContainer):
+    def __init__(self, id=None):
+        super().__init__(id=id, classes="content-container")
+        self.content = HistoryContent(id="history-chart")
+
+    def on_mount(self) -> None:
+        self.mount(self.content)
+        self.content.update("No song selected")
+
+    def update(self, renderable):
+        if hasattr(self, "content") and self.content.is_mounted:
+            self.content.update(renderable)
+
+    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack]):
+        if not current_song:
+            self.update("No song selected")
+            return
+
+        if scrobbles is False:
+            self.update("Failed to load scrobble history")
+            return
+
+        if not scrobbles:
+            self.update(f"No previous scrobbles found for: {current_song.display_name()}")
+            return
+
+        year_counts = defaultdict(int)
+        for scrobble in scrobbles:
+            dt = datetime.strptime(scrobble.scrobbled_at, settings.DATETIME_FORMAT)
+            year = dt.year
+            year_counts[year] += 1
+
+        sorted_years = sorted(year_counts.items())
+
+        if not sorted_years:
+            self.update("No scrobble data available for chart")
+            return
+
+        chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name()}", expand=True)
+        chart_table.add_column("Year", style="cyan", width=8)
+        chart_table.add_column("Count", style="white", width=8)
+        chart_table.add_column("Chart", style="green")
+
+        max_count = max(year_counts.values())
+
+        for year, count in sorted_years:
+            # simple bar representation
+            bar_width = max(1, int((count / max_count) * 40))  # scale to max 40 chars
+            bar = "█" * bar_width
+
+            chart_table.add_row(
+                str(year),
+                str(count),
+                f"{bar} ({count})"
+            )
+
+        # additional metrics
+        chart_table.add_section()
+        total_scrobbles = sum(year_counts.values())
+        years_span = max(year_counts.keys()) - min(year_counts.keys()) + 1 if year_counts else 0
+        avg_per_year = total_scrobbles / len(year_counts) if year_counts else 0
+
+        summary_table = Table(title="Summary", width=60)
+        summary_table.add_column("Metric", style="dim")
+        summary_table.add_column("Value", style="bold white")
+
+        summary_table.add_row("Total Scrobbles", str(total_scrobbles))
+        summary_table.add_row("Years Active", str(len(year_counts)))
+        summary_table.add_row("Year Span", str(years_span))
+        summary_table.add_row("Avg per Year", f"{avg_per_year:.1f}")
+        summary_table.add_row("Peak Year", f"{max(year_counts, key=year_counts.get)} ({max(year_counts.values())} scrobbles)")
+
+        combined_display = Group(chart_table, "", summary_table)
+        self.update(combined_display)
+
+
 class SessionInfoWidget(Static):
     def __init__(self, session: SessionScrobbles, id=None):
-        super().__init__(id=id)
+        super().__init__(id=id, classes="content-container")
         self.session = session
         self.update_session_info()
 
