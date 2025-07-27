@@ -132,7 +132,7 @@ class HistoryChartWidget(ScrollableContainer):
         if hasattr(self, "content") and self.content.is_mounted:
             self.content.update(renderable)
 
-    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack]):
+    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack], start_year: int) -> None:
         if not current_song:
             self.update("No song selected")
             return
@@ -148,47 +148,41 @@ class HistoryChartWidget(ScrollableContainer):
         year_counts = defaultdict(int)
         for scrobble in scrobbles:
             dt = datetime.strptime(scrobble.scrobbled_at, settings.DATETIME_FORMAT)
-            year = dt.year
-            year_counts[year] += 1
+            year_counts[dt.year] += 1
 
-        sorted_years = sorted(year_counts.items())
-
-        if not sorted_years:
-            self.update("No scrobble data available for chart")
-            return
+        current_year = datetime.now().year
+        all_years = range(start_year, current_year + 1)
 
         chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name()}", expand=True)
         chart_table.add_column("Year", style="cyan", width=8)
         chart_table.add_column("Count", style="white", width=8)
         chart_table.add_column("Chart", style="green")
 
-        max_count = max(year_counts.values())
+        # get max count for bar scaling
+        max_count = max(year_counts.values()) if year_counts else 1
 
-        for year, count in sorted_years:
-            # simple bar representation
-            bar_width = max(1, int((count / max_count) * 40))  # scale to max 40 chars
-            bar = "█" * bar_width
+        for year in all_years:
+            count = year_counts.get(year, 0)
+            if count > 0:
+                bar_width = int((count / max_count) * 50)
+                bar = "█" * bar_width
+                chart_display = f"{bar} ({count})"
+            else:
+                chart_display = f"({count})"
 
-            chart_table.add_row(
-                str(year),
-                str(count),
-                f"{bar} ({count})"
-            )
+            chart_table.add_row(str(year), str(count), chart_display)
 
-        # additional metrics
         chart_table.add_section()
         total_scrobbles = sum(year_counts.values())
-        years_span = max(year_counts.keys()) - min(year_counts.keys()) + 1 if year_counts else 0
-        avg_per_year = total_scrobbles / len(year_counts) if year_counts else 0
+        avg_per_year = total_scrobbles / len(all_years)
 
-        summary_table = Table(title="Summary", width=60)
+        summary_table = Table(title="Additional Stats", width=60)
         summary_table.add_column("Metric", style="dim")
         summary_table.add_column("Value", style="bold white")
 
         summary_table.add_row("Total Scrobbles", str(total_scrobbles))
-        summary_table.add_row("Years Active", str(len(year_counts)))
-        summary_table.add_row("Year Span", str(years_span))
-        summary_table.add_row("Avg per Year", f"{avg_per_year:.1f}")
+        summary_table.add_row("Years With Scrobbles", str(len(year_counts)))
+        summary_table.add_row("Average per Year", f"{avg_per_year:.1f}")
         summary_table.add_row("Peak Year", f"{max(year_counts, key=year_counts.get)} ({max(year_counts.values())} scrobbles)")
 
         combined_display = Group(chart_table, "", summary_table)
