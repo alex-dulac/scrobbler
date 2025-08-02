@@ -11,7 +11,7 @@ from models.track import AppleMusicTrack, SpotifyTrack, Track
 from service.apple_music_service import poll_apple_music
 from service.lastfm_service import LastFmService
 from service.spotify_service import SpotifyService
-from utils import poll_comparison, internet
+from library.utils import poll_comparison, internet
 
 bar = "=" * 110
 loop = True

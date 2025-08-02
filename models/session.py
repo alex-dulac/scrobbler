@@ -4,7 +4,7 @@ from loguru import logger
 
 from models.track import Track, LastFmTrack
 from service.lastfm_service import LastFmService
-from utils import internet
+from library.utils import internet
 
 
 class SessionScrobbles:

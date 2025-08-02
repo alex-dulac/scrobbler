@@ -2,15 +2,13 @@
 
 py-scrobbler is a tool for tracking and logging your music listening activity to Last.fm from Apple Music and Spotify. It is built using Python and leverages several modern technologies to provide a seamless experience.
 
-
 ## Features
 
-- **FastAPI**: A modern, fast (high-performance) web framework for building APIs with Python 3.8+ based on standard Python type hints.
+- **FastAPI**: A modern, fast (high-performance) web framework for building APIs with Python based on standard Python type hints.
 - **Uvicorn**: An ASGI server for running the FastAPI application.
 - **pylast**: A Python interface to Last.fm's API.
 - **applescript**: A Python library to run AppleScript commands, used to interact with the Apple Music application.
 - **spotipy**: A Python interface to Spotify's API.
-- **Loguru**: A library for logging, providing an easy and powerful logging experience.
 - **Textual**: A TUI (Text User Interface) framework for Python, used to create an interactive terminal interface.
 
 ## Getting Started
@@ -47,10 +45,6 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
     cp .env.example .env
     ```
 
-### Configuration
-
-The `.env` file should contain the environment variables found in `.env.example`.
-
 ## Running the Application
 
 You can run py-scrobbler in three different ways:
@@ -61,11 +55,11 @@ The FastAPI application provides a web API that can be consumed by frontend appl
 
 1. **Start the FastAPI server:**
    ```sh
-    python app.py
+    python server.py
     ```
    or
     ```sh
-    uvicorn app:app --reload
+    uvicorn server:app --reload
     ```
 This starts the FastAPI server on http://localhost:8000. 
 <br>
@@ -74,6 +68,12 @@ API documentation is built-in at http://localhost:8000/docs.
 ### Text User Interface (TUI)
 
 The TUI application provides an interactive terminal interface with visual elements like progress bars and formatted text.
+
+#### The History Chart represents the current song scrobbles broken down by year
+<img src="library/images/tui_chart.png" alt="drawing" width="500"/>
+
+#### The Session displays all scrobbled tracks during app usage
+<img src="library/images/tui_session.png" alt="drawing" width="500"/>
 
 1. **Start the TUI:**
    ```sh
@@ -87,9 +87,9 @@ Features of the TUI:
 - Process pending scrobbles that couldn't be sent due to connectivity issues
 - Rich text formatting for better readability
 
-### Command Line Interface
+### Command Line Loop
 
-The loop script provides a simple command-line interface that displays the currently playing track and scrobble status.
+The loop script provides a simple command-line output that displays the currently playing track and scrobble status.
 
 1. **Run the loop script:**
     ```sh
@@ -111,16 +111,6 @@ The loop script provides a simple command-line interface that displays the curre
    2025-05-08 09:36:18.427 | INFO     | service.lastfm_service:update_now_playing:177 - Updated Last.fm now playing
    `The Freaks, Nerds, & Romantics` by The Bouncing Souls from `Maniacal Laughter` | Time played: 28s
    ```
-
-### Key Files
-
-- **app.py**: The main entry point for the FastAPI application.
-- **tui_app.py**: A Text User Interface application with interactive elements.
-- **loop.py**: A script to run the application in a loop, continuously polling music services for the current track.
-- **config/settings.py**: Configuration settings for the application, including environment variables.
-- **api/**: Contains the API routes and endpoints.
-- **models/**: Contains the data models used in the application.
-- **service/**: Contains the service modules for interacting with Apple Music, Last.fm, and Spotify.
 
 ## Contributing
 

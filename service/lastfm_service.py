@@ -12,7 +12,7 @@ from models.artist import LastFmArtist
 from models.lastfm_models import LastFmTopItem
 from models.track import LastFmTrack, Track
 from models.user import LastFmUser
-from utils import clean_up_title
+from library.utils import clean_up_title
 
 LASTFM_API_URL = settings.LASTFM_API_URL
 LASTFM_API_KEY = settings.LASTFM_API_KEY

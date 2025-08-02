@@ -6,7 +6,7 @@ from models.artist import SpotifyArtist
 from models.integrations import PlaybackAction
 from models.track import SpotifyTrack
 from models.user import SpotifyUser
-from utils import clean_up_title
+from library.utils import clean_up_title
 
 scope = [
     'user-read-playback-state',

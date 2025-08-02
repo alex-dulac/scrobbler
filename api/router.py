@@ -9,7 +9,7 @@ from api.user_router import user_router
 from config.security import verify_token
 from service.apple_music_service import poll_apple_music, get_current_track_artwork_data
 from service.lastfm_service import get_lastfm_account_details, LastFmService
-from utils import poll_comparison
+from library.utils import poll_comparison
 from service.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[

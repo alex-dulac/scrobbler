@@ -229,9 +229,9 @@ class SessionInfoWidget(Static):
         scrobbles_table.add_column("Album", style="yellow", width=25)
         scrobbles_table.add_column("Time", style="green", width=16)
 
-        for i, scrobble in enumerate(self.session.scrobbles, 1):
+        for i, scrobble in enumerate(reversed(self.session.scrobbles)):
             scrobbles_table.add_row(
-                str(i),
+                str(len(self.session.scrobbles) - i),
                 scrobble.name,
                 scrobble.artist,
                 scrobble.album,

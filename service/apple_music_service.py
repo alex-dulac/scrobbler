@@ -6,7 +6,7 @@ from loguru import logger
 from models.integrations import PlaybackAction
 from models.mac_os import MacOSSystemInfo
 from models.track import AppleMusicTrack
-from utils import clean_up_title
+from library.utils import clean_up_title
 
 """
 Apple Music related methods

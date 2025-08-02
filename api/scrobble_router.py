@@ -3,7 +3,7 @@ from loguru import logger
 
 from api.state import get_app_state
 from service.lastfm_service import LastFmService
-from utils import validate_scrobble_in_state
+from library.utils import validate_scrobble_in_state
 
 scrobble_router = APIRouter()
 lastfm = LastFmService()

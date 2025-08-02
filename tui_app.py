@@ -14,8 +14,8 @@ from models.track import Track
 from service.apple_music_service import poll_apple_music, playback_control
 from service.spotify_service import SpotifyService
 from service.lastfm_service import LastFmService
-import widgets
-from utils import poll_comparison, Comparison
+import library.tui_widgets as widgets
+from library.utils import poll_comparison, Comparison
 
 
 SCROBBLED = "✓ Scrobbled to Last.fm"
