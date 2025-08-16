@@ -113,7 +113,8 @@ def clean_up_title(title: str) -> str:
         'anniversary',
         'edit',
         'deluxe',
-        'reissue'
+        'reissue',
+        'explicit'
     }
 
     pattern = r'\([^)]*(?:{})[^)]*\)|\[[^]]*(?:{})[^]]*\]'.format(

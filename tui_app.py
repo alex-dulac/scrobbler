@@ -157,9 +157,9 @@ class ScrobblerApp(App):
                 self.notify("Failed to control playback. Spotify Premium required.")
 
     @staticmethod
-    def format_song_info(song, status="") -> Text:
+    def format_song_info(song: Track, status="") -> Text:
         text = Text()
-        text.append(f"{song.name}\n", style="bold white")
+        text.append(f"{song.clean_name}\n", style="bold white")
         text.append(f"by ", style="dim")
         text.append(f"{song.artist}", style="italic cyan")
         if song.album:
