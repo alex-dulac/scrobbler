@@ -6,11 +6,11 @@ import sys
 from loguru import logger
 
 from models.integrations import Integration
-from models.session import SessionScrobbles
+from models.session_scrobbles import SessionScrobbles
 from models.track import AppleMusicTrack, SpotifyTrack, Track
-from service.apple_music_service import poll_apple_music
-from service.lastfm_service import LastFmService
-from service.spotify_service import SpotifyService
+from services.apple_music_service import poll_apple_music
+from services.lastfm_service import LastFmService
+from services.spotify_service import SpotifyService
 from library.utils import poll_comparison, internet
 
 bar = "=" * 110

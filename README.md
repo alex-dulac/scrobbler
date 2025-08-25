@@ -77,7 +77,7 @@ The TUI application provides an interactive terminal interface with visual eleme
 
 1. **Start the TUI:**
    ```sh
-    python tui_app.py
+    python textual_app.py
     ```
    
 Features of the TUI:

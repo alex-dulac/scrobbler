@@ -1,12 +1,35 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from loguru import logger
 
 from config import settings
 from api.router import router
+from db.db_session import session_manager
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db_connected = False
+
+    try:
+        await session_manager.init_db()
+        db_connected = True
+        logger.info("Database connection successful.")
+    except Exception as e:
+        logger.warning(f"Could not connect to database: {e}")
+        logger.warning(f"Some api features might not work as expected.")
+
+    yield
+
+    if db_connected:
+        await session_manager.close_db()
+        logger.info("Database connection closed.")
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

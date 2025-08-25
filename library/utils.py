@@ -114,7 +114,8 @@ def clean_up_title(title: str) -> str:
         'edit',
         'deluxe',
         'reissue',
-        'explicit'
+        'explicit',
+        'album version'
     }
 
     pattern = r'\([^)]*(?:{})[^)]*\)|\[[^]]*(?:{})[^]]*\]'.format(

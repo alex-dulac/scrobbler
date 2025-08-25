@@ -236,9 +236,9 @@ class LastFmService:
             return None
 
     async def current_track_user_scrobbles(self, current_song: Track) -> bool | list[LastFmTrack]:
-        tracks = []
-
         try:
+            tracks = []
+
             # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
             track_scrobbles = self.user.get_track_scrobbles(current_song.artist, current_song.name)
             if current_song.has_clean_name():
@@ -255,12 +255,13 @@ class LastFmService:
                     scrobbled_at=timestamp
                 )
                 tracks.append(track)
+
+            return tracks
+
         except pylast.PyLastError as e:
             logger.error(f"Failed to get user scrobbles for {current_song.display_name()}")
             logger.error(f"Error: {e}")
             return False
-
-        return tracks
 
     async def user_weekly_chart_dates(self):
         return self.user.get_weekly_chart_dates()

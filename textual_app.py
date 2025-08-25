@@ -8,13 +8,14 @@ from textual.containers import Container
 from textual import work
 from rich.text import Text
 
+from db.db_session import session_manager
 from models.integrations import Integration, PlaybackAction
-from models.session import SessionScrobbles
+from models.session_scrobbles import SessionScrobbles
 from models.track import Track
-from service.apple_music_service import poll_apple_music, playback_control
-from service.spotify_service import SpotifyService
-from service.lastfm_service import LastFmService
-import library.tui_widgets as widgets
+from services.apple_music_service import poll_apple_music, playback_control
+from services.spotify_service import SpotifyService
+from services.lastfm_service import LastFmService
+import library.textual_widgets as widgets
 from library.utils import poll_comparison, Comparison
 
 
@@ -35,9 +36,10 @@ class ScrobblerApp(App):
         self.spotify = SpotifyService()
         self.current_song = None
         self.session = SessionScrobbles(self.lastfm)
-        self.current_view = "history-list"
+        self.current_view = "history-chart"
         self.is_scrobbling = False # mitigate duplicate scrobbles
         self.start_year = None
+        self.db_connected = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -78,14 +80,22 @@ class ScrobblerApp(App):
     def update_session_info(self) -> None:
         self.query_one(widgets.SessionInfoWidget).update_session_info()
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
+        try:
+            await session_manager.init_db()
+            self.db_connected = True
+            self.notify("Database connected successfully.")
+        except Exception as e:
+            self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
+
+        registered = self.lastfm.user.get_registered()
+        self.start_year = datetime.fromtimestamp(int(registered)).year
+
         self.set_interval(1, self.update_display)
         self.update_song_info(WAITING)
         self.update_progress_bar(0, WAITING)
         self.query_one(widgets.HistoryListWidget).update(WAITING)
         self.update_view_visibility()
-        registered = self.lastfm.user.get_registered()
-        self.start_year = datetime.fromtimestamp(int(registered)).year
 
     def update_view_visibility(self) -> None:
         history_list = self.query_one("#history-list")
@@ -113,6 +123,9 @@ class ScrobblerApp(App):
         if self.session.pending:
             count = await self.session.process_pending_scrobbles()
             self.notify(f"Processed {count} pending scrobbles.")
+
+        if self.db_connected:
+            await session_manager.close_db()
 
         await asyncio.sleep(2)
         self.exit()

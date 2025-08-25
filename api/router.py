@@ -7,10 +7,10 @@ from api.scrobble_router import scrobble_router
 from api.state import get_app_state
 from api.user_router import user_router
 from config.security import verify_token
-from service.apple_music_service import poll_apple_music, get_current_track_artwork_data
-from service.lastfm_service import get_lastfm_account_details, LastFmService
+from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
+from services.lastfm_service import get_lastfm_account_details, LastFmService
 from library.utils import poll_comparison
-from service.spotify_service import SpotifyService
+from services.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),

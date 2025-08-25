@@ -3,7 +3,7 @@ from typing import List, Dict
 from loguru import logger
 
 from models.track import Track, LastFmTrack
-from service.lastfm_service import LastFmService
+from services.lastfm_service import LastFmService
 from library.utils import internet
 
 
