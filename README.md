@@ -4,12 +4,13 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
 
 ## Features
 
-- **FastAPI**: A modern, fast (high-performance) web framework for building APIs with Python based on standard Python type hints.
-- **Uvicorn**: An ASGI server for running the FastAPI application.
+- **FastAPI**: A high-performance web framework for building APIs.
 - **pylast**: A Python interface to Last.fm's API.
 - **applescript**: A Python library to run AppleScript commands, used to interact with the Apple Music application.
 - **spotipy**: A Python interface to Spotify's API.
 - **Textual**: A TUI (Text User Interface) framework for Python, used to create an interactive terminal interface.
+- **postgreSQL**: Object-relational database system for storing scrobble data. This is not required but recommended for deeper insights and statistics.
+- **SQLAlchemy**: SQL toolkit and Object-Relational Mapping (ORM) library for Python, used to interact with the PostgreSQL database.
 
 ## Getting Started
 
@@ -17,8 +18,9 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
 
 - Python 3.10+
 - Apple Music application installed on your macOS (if you want to scrobble from Apple Music)
-- Spotify account (if you want to scrobble from Spotify)
-- Last.fm account
+- Spotify account (if you want to scrobble from Spotify. API credential docs: https://developer.spotify.com/documentation/web-api)
+- Last.fm account and API credentials (https://www.last.fm/api/account/create)
+- postreSQL database (optional but recommended)
 
 ### Installation
 
@@ -49,21 +51,9 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
 
 You can run py-scrobbler in three different ways:
 
-### FastAPI Web Application
-
-The FastAPI application provides a web API that can be consumed by frontend applications (see [scrobbler-web](https://github.com/alex-dulac/scrobbler-web) for accompanying React app).
-
-1. **Start the FastAPI server:**
-   ```sh
-    python server.py
-    ```
-   or
-    ```sh
-    uvicorn server:app --reload
-    ```
-This starts the FastAPI server on http://localhost:8000. 
-<br>
-API documentation is built-in at http://localhost:8000/docs.
+   - A Text User Interface (TUI) application (recommended)
+   - A FastAPI web application 
+   - A simple command line loop that prints the current song and scrobble status
 
 ### Text User Interface (TUI)
 
@@ -86,6 +76,22 @@ Features of the TUI:
 - Session statistics showing top artists and repeat scrobbles
 - Process pending scrobbles that couldn't be sent due to connectivity issues
 - Rich text formatting for better readability
+
+### FastAPI Web Application
+
+The FastAPI application provides a web API that can be consumed by frontend applications (see [scrobbler-web](https://github.com/alex-dulac/scrobbler-web) for accompanying React app).
+
+1. **Start the FastAPI server:**
+   ```sh
+    python server.py
+    ```
+   or
+    ```sh
+    uvicorn server:app --reload
+    ```
+This starts the FastAPI server on http://localhost:8000.
+<br>
+API documentation is built-in at http://localhost:8000/docs.
 
 ### Command Line Loop
 

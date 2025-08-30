@@ -12,10 +12,8 @@ class SessionManager:
         self.session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
     async def init_db(self) -> None:
-        url = settings.DATABASE_URL
-
         self.engine = create_async_engine(
-            url,
+            url=settings.DATABASE_URL,
             poolclass=AsyncAdaptedQueuePool,
             pool_pre_ping=True,
         )
@@ -28,14 +26,15 @@ class SessionManager:
         )
 
         async with self.engine.begin() as conn:
-            # await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
     async def close_db(self) -> None:
         if self.engine:
             await self.engine.dispose()
 
+
 session_manager = SessionManager()
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if not session_manager.session_factory:
