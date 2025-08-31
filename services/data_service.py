@@ -17,7 +17,7 @@ from db.tables import (
     SimilarTrack,
     ArtistTopAlbum
 )
-from services.base_db_service import BaseService
+from services.base_db_service import BaseDbService
 
 
 class ScrobbleFilter:
@@ -68,7 +68,7 @@ distinct_albums = Sequence[Row[tuple[Scrobble.album_name, Scrobble.artist_name]]
 distinct_tracks = Sequence[Row[tuple[Scrobble.track_name, Scrobble.artist_name]]]
 
 
-class DataService(BaseService):
+class DataService(BaseDbService):
     """
     Service for interacting with data in the database.
     Last.fm's API is limited when it comes to querying a user's library.
@@ -204,3 +204,36 @@ class DataService(BaseService):
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_artists_with_no_ref_data(self) -> Any:
+        query = (
+            select(Scrobble.artist_name)
+            .outerjoin(Artist, Scrobble.artist_name == Artist.name)
+            .where(Artist.name.is_(None))
+            .distinct()
+            .order_by(Scrobble.artist_name)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_albums_with_no_ref_data(self) -> Any:
+        query = (
+            select(Scrobble.album_name)
+            .outerjoin(Album, Scrobble.album_name == Album.title)
+            .where(Album.title.is_(None))
+            .distinct()
+            .order_by(Scrobble.album_name)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_tracks_with_no_ref_data(self) -> Any:
+        query = (
+            select(Scrobble.track_name)
+            .outerjoin(Track, Scrobble.track_name == Track.title)
+            .where(Track.title.is_(None))
+            .distinct()
+            .order_by(Scrobble.track_name)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()

@@ -1,6 +1,10 @@
 # py-scrobbler
 
-py-scrobbler is a tool for tracking and logging your music listening activity to Last.fm from Apple Music and Spotify. It is built using Python and leverages several modern technologies to provide a seamless experience.
+py-scrobbler is a tool for tracking and logging your music listening activity to Last.fm from Apple Music and Spotify.
+
+It provides a Text User Interface (TUI) dashboard with real-time scrobbling, a FastAPI backend for web integration, and a command-line loop for simple usage. 
+
+The application also supports syncing your Last.fm library in a PostgreSQL database for deeper insights and statistics.
 
 ## Features
 
@@ -47,7 +51,24 @@ py-scrobbler is a tool for tracking and logging your music listening activity to
     cp .env.example .env
     ```
 
-## Running the Application
+## Syncing your Last.fm library with your PostgreSQL database
+
+To sync your Last.fm library scrobbles with your PostgreSQL database, run the following script:
+
+```sh
+python -m scripts.sync_scrobbles
+```
+
+To sync reference data for artists, albums, and tracks, run:
+
+```sh
+python -m scripts.sync_ref_data
+```
+
+Note that syncing your entire Last.fm library may take a while depending on the number of scrobbles you have.
+
+
+## Running the Applications
 
 You can run py-scrobbler in three different ways:
 
