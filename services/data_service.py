@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Tuple, Sequence, Any
 
-from loguru import logger
 from sqlalchemy import select, Select, Row
 
 from db.tables import (
@@ -26,12 +25,14 @@ class ScrobbleFilter:
         track_name: str = None,
         artist_name: str = None,
         album_name: str = None,
+        scrobbled_at: datetime = None,
         scrobbled_after: str = None,
         scrobbled_before: str = None
     ):
         self.track_name = track_name
         self.artist_name = artist_name
         self.album_name = album_name
+        self.scrobbled_at = scrobbled_at
         self.scrobbled_after = scrobbled_after
         self.scrobbled_before = scrobbled_before
 
@@ -50,6 +51,9 @@ async def build_query(filter: ScrobbleFilter) -> Select[Tuple[Scrobble]]:
 
     if filter.album_name:
         query = query.where(Scrobble.album_name == filter.album_name)
+
+    if filter.scrobbled_at:
+        query = query.where(Scrobble.scrobbled_at == filter.scrobbled_at)
 
     if filter.scrobbled_after:
         after_date = datetime.strptime(filter.scrobbled_after, "%Y-%m-%d")
@@ -74,7 +78,7 @@ class DataService(BaseDbService):
     Last.fm's API is limited when it comes to querying a user's library.
     By syncing the user's scrobbles to a database, we can run sql against it.
     """
-    async def get_scrobbles(self, filter: ScrobbleFilter = None) -> Sequence[Scrobble]:
+    async def get_scrobbles(self, filter: ScrobbleFilter = None) -> Any:
         query = await build_query(filter)
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -116,7 +120,6 @@ class DataService(BaseDbService):
         return result.scalar_one_or_none()
 
     async def get_album(self, album_name: str, artist_name: str) -> Any:
-        logger.info(f"Looking up album '{album_name}' by artist '{artist_name}'")
         query = (
             select(Album)
             .where(Album.title == album_name)

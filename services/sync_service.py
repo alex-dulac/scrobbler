@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 from pylast import WSError
 from loguru import logger
@@ -8,7 +9,7 @@ from sqlalchemy import Row
 import db.tables as tables
 from library.utils import lastfm_friendly
 from services.base_db_service import BaseDbService
-from services.data_service import DataService
+from services.data_service import DataService, ScrobbleFilter
 from services.lastfm_service import LastFmService
 
 
@@ -24,7 +25,68 @@ class SyncService(BaseDbService):
         self.lastfm_service = LastFmService()
         self.data_service = DataService(db=self.db)
 
-    async def sync_all(self) -> None:
+    async def sync_scrobbles(self, time_from, time_to) -> None:
+        fetched = 0
+        time_from = int(datetime.strptime(time_from, "%Y-%m-%d").timestamp()) if time_from else None
+        time_to = int(datetime.strptime(time_to, "%Y-%m-%d").timestamp()) if time_to else None
+
+        while True:
+            if time_from and time_to and time_from >= time_to:
+                logger.info("Reached the specified time_from limit. Stopping sync.")
+                break
+
+            tracks = self.lastfm_service.user.get_recent_tracks(
+                limit=200, # max allowed by the API
+                time_to=time_to
+            )
+
+            if not tracks:
+                break
+
+            batch_scrobbles = []
+            for t in tracks:
+                track_name = t.track.title
+                artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
+                album_name = t.album if t.album else None
+                scrobbled_at = datetime.fromtimestamp(int(t.timestamp))
+
+                # Check if scrobble already exists
+                existing_scrobble = await self.data_service.get_scrobbles(
+                    ScrobbleFilter(
+                        track_name=track_name,
+                        artist_name=artist_name,
+                        album_name=album_name,
+                        scrobbled_at=scrobbled_at
+                    )
+                )
+                if existing_scrobble:
+                    logger.info(f"Scrobble already exists in DB: {artist_name} - {track_name} at {scrobbled_at}. Skipping.")
+                    continue
+
+                scrobble = tables.Scrobble(
+                    track_name=track_name,
+                    artist_name=artist_name,
+                    album_name=album_name,
+                    scrobbled_at=scrobbled_at,
+                    created_at=datetime.now()
+                )
+                batch_scrobbles.append(scrobble)
+
+            self.db.add_all(batch_scrobbles)
+            await self.db.commit()
+
+            fetched += len(tracks)
+            logger.info(f"Fetched and saved {fetched} scrobbles...")
+
+            # update time_to to the oldest timestamp from this batch - 1
+            oldest = int(tracks[-1].timestamp)
+            time_to = oldest - 1
+
+            await asyncio.sleep(0.5)
+
+        logger.info(f"Done. Total fetched and saved: {fetched}")
+
+    async def sync_all_ref_data(self) -> None:
         await self.sync_artists(True)
         await self.sync_albums(True)
         await self.sync_tracks(True)

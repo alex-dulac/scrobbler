@@ -20,7 +20,7 @@ async def main():
     async with session_manager.session_factory() as db:
         try:
             sync_service = SyncService(db=db)
-            # await sync_service.sync_all()
+            # await sync_service.sync_all_ref_data()
 
             # Alternatively, sync individual entities:
 
