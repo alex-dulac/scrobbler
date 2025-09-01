@@ -20,17 +20,13 @@ async def main():
     async with session_manager.session_factory() as db:
         try:
             sync_service = SyncService(db=db)
-            await sync_service.sync_all()
+            # await sync_service.sync_all()
 
             # Alternatively, sync individual entities:
 
             # await sync_service.sync_artists()
-            # await sync_service.sync_albums()
+            await sync_service.sync_albums(True)
             # await sync_service.sync_tracks()
-
-        except Exception as e:
-            logger.error(f"Error occurred: {e}")
-            await db.rollback()
 
         finally:
             await db.close()

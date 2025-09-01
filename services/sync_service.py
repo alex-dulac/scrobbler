@@ -1,5 +1,6 @@
 import asyncio
 
+from pylast import WSError
 from loguru import logger
 from pylast import TopItem, Track as PylastTrack
 from sqlalchemy import Row
@@ -15,6 +16,8 @@ class SyncService(BaseDbService):
     """
     Service to sync reference data from Last.fm API into the database.
     Db must be provided when triggered from outside an async context manager.
+    Can sync all data, or just artists, albums, or tracks.
+    This has the potential to make a lot of API calls, so be mindful of usage.
     """
     def __init__(self, db = None):
         super().__init__(db)
@@ -33,12 +36,12 @@ class SyncService(BaseDbService):
         else:
             artists = await self.data_service.get_artists_from_scrobbles()
 
+        logger.info("Starting all artist data sync...")
         for artist_name in artists:
-            logger.info(f"Processing artist: {artist_name}")
             await self.sync_artist(artist_name)
             await asyncio.sleep(1) # to respect Last.fm's API
 
-        await self.db.commit()
+        logger.info("Artist data sync complete.")
 
     async def sync_albums(self, only_missing: bool) -> None:
         if only_missing:
@@ -46,11 +49,12 @@ class SyncService(BaseDbService):
         else:
             albums = await self.data_service.get_albums_from_scrobbles()
 
+        logger.info("Starting all albums data sync...")
         for album in albums:
             await self.sync_album(album)
             await asyncio.sleep(1)
 
-        await self.db.commit()
+        logger.info("Album data sync complete.")
 
     async def sync_tracks(self, only_missing: bool) -> None:
         if only_missing:
@@ -58,13 +62,14 @@ class SyncService(BaseDbService):
         else:
             tracks = await self.data_service.get_tracks_from_scrobbles()
 
+        logger.info("Starting all tracks data sync...")
         for track in tracks:
             await self.sync_track(track)
             await asyncio.sleep(1)
 
-        await self.db.commit()
+        logger.info("Track data sync complete.")
 
-    async def sync_artist(self, artist_name: str, db_commit: bool = True) -> None:
+    async def sync_artist(self, artist_name: str) -> None:
         logger.info(f"Syncing artist: {artist_name}")
         lastfm_artist = self.lastfm_service.network.get_artist(
             lastfm_friendly(artist_name)
@@ -104,7 +109,7 @@ class SyncService(BaseDbService):
             db_artist_tag = await self.data_service.check_artist_tag(artist_name=artist_name, tag=tag_name)
             if db_artist_tag:
                 db_artist_tag.weight = weight
-                logger.info(f"Updating artist tag in DB: {tag_name} for artist {artist_name}")
+                # logger.info(f"Updating artist tag in DB: {tag_name} for artist {artist_name}")
             else:
                 at = tables.ArtistTag(
                     artist_name=artist_name,
@@ -112,7 +117,7 @@ class SyncService(BaseDbService):
                     weight=weight,
                 )
                 self.db.add(at)
-                logger.info(f"Adding artist tag to DB: {tag_name} for artist {artist_name}")
+                # logger.info(f"Adding artist tag to DB: {tag_name} for artist {artist_name}")
 
         similar = lastfm_artist.get_similar(limit=20)
         for s in similar:
@@ -125,7 +130,7 @@ class SyncService(BaseDbService):
             if db_similar_artist:
                 # match is the only field to update
                 db_similar_artist.match = match
-                logger.info(f"Updating similar artist in DB: {s_name} for artist {artist_name}")
+                # logger.info(f"Updating similar artist in DB: {s_name} for artist {artist_name}")
             else:
                 sa = tables.SimilarArtist(
                     artist_name=artist_name,
@@ -133,7 +138,7 @@ class SyncService(BaseDbService):
                     match=match,
                 )
                 self.db.add(sa)
-                logger.info(f"Adding similar artist to DB: {s_name} for artist {artist_name}")
+                # logger.info(f"Adding similar artist to DB: {s_name} for artist {artist_name}")
 
         top_tracks: list[TopItem] = lastfm_artist.get_top_tracks(limit=20)
         top_tracks.sort(key=lambda x: x.weight , reverse=True)
@@ -146,7 +151,7 @@ class SyncService(BaseDbService):
             if db_top_track:
                 db_top_track.weight = weight
                 db_top_track.rank = rank
-                logger.info(f"Updating top track in DB: {title} for artist {artist_name}")
+                # logger.info(f"Updating top track in DB: {title} for artist {artist_name}")
             else:
                 att = tables.ArtistTopTrack(
                     artist_name=artist_name,
@@ -155,7 +160,7 @@ class SyncService(BaseDbService):
                     rank=rank
                 )
                 self.db.add(att)
-                logger.info(f"Adding top track to DB: {track.title} for artist {artist_name}")
+                # logger.info(f"Adding top track to DB: {track.title} for artist {artist_name}")
 
         top_albums: list[TopItem] = lastfm_artist.get_top_albums(limit=20)
         top_albums.sort(key=lambda x: x.weight, reverse=True)
@@ -168,7 +173,7 @@ class SyncService(BaseDbService):
             if db_top_album:
                 db_top_album.weight = weight
                 db_top_album.rank = rank
-                logger.info(f"Updating top album in DB: {title} for artist {artist_name}")
+                # logger.info(f"Updating top album in DB: {title} for artist {artist_name}")
             else:
                 ata = tables.ArtistTopAlbum(
                     artist_name=artist_name,
@@ -177,19 +182,35 @@ class SyncService(BaseDbService):
                     rank=rank
                 )
                 self.db.add(ata)
-                logger.info(f"Adding top album to DB: {album.title} for artist {artist_name}")
+                # logger.info(f"Adding top album to DB: {album.title} for artist {artist_name}")
 
-        if db_commit:
-            await self.db.commit()
-            logger.info(f"Artist data sync complete for {artist_name}.")
+        await self.db.commit()
+        logger.info(f"Artist data sync complete for {artist_name}.")
 
-    async def sync_album(self, album: Row[tuple[str, str]], db_commit: bool = True) -> None:
+    async def sync_album(self, album: Row[tuple[str, str]]) -> None:
+        logger.info(f"Syncing album: {album}")
         title = album[0]
         artist = album[1]
+
+        if not artist or not title:
+            logger.warning(f"Skipping album with missing artist or title: {album}")
+            return
+
         lastfm_album = self.lastfm_service.network.get_album(
             artist=lastfm_friendly(artist),
             title=lastfm_friendly(title)
         )
+
+        if not lastfm_album:
+            logger.warning(f"Album not found on Last.fm: {artist} - {title}")
+            return
+
+        # Sniff out edge case occurrence where lastfm_album is returned but cannot be found when fetching details
+        try:
+            lastfm_album.get_mbid()
+        except WSError as e:
+            logger.warning(f"Error fetching album details from Last.fm for {artist} - {title}: {e}")
+            return
 
         mbid = lastfm_album.get_mbid()
         url = lastfm_album.get_url()
@@ -229,7 +250,7 @@ class SyncService(BaseDbService):
             db_album_tag = await self.data_service.check_album_tag(album_name=title, tag=tag_name, artist_name=artist)
             if db_album_tag:
                 db_album_tag.weight = weight
-                logger.info(f"Updating album tag in DB: {tag_name} for album {title}")
+                # logger.info(f"Updating album tag in DB: {tag_name} for album {title}")
             else:
                 at = tables.AlbumTag(
                     album_name=title,
@@ -238,7 +259,7 @@ class SyncService(BaseDbService):
                     weight=weight,
                 )
                 self.db.add(at)
-                logger.info(f"Adding album tag to DB: {tag_name} for album {title}")
+                # logger.info(f"Adding album tag to DB: {tag_name} for album {title}")
 
         album_tracks: list[PylastTrack] = lastfm_album.get_tracks()
         for order, track in enumerate(album_tracks, start=1):
@@ -247,7 +268,7 @@ class SyncService(BaseDbService):
             db_album_track: tables.AlbumTrack = await self.data_service.check_album_track(album_name=title, track_name=track_title)
             if db_album_track:
                 db_album_track.order = order
-                logger.info(f"Updating track in DB: {track_title} for album {title}")
+                # logger.info(f"Updating track in DB: {track_title} for album {title}")
             else:
                 at = tables.AlbumTrack(
                     album_name=title,
@@ -256,12 +277,12 @@ class SyncService(BaseDbService):
                     order=order
                 )
                 self.db.add(at)
-                logger.info(f"Adding track to DB: {track_title} for album {title} by {artist}")
+                # logger.info(f"Adding track to DB: {track_title} for album {title} by {artist}")
 
-        if db_commit:
-            await self.db.commit()
+        await self.db.commit()
+        logger.info(f"Album data sync complete for {title} by {artist}.")
 
-    async def sync_track(self, track: Row[tuple[str, str]], db_commit: bool = True) -> None:
+    async def sync_track(self, track: Row[tuple[str, str]]) -> None:
         title = track[0]
         artist = track[1]
         lastfm_track = self.lastfm_service.network.get_track(
@@ -323,7 +344,7 @@ class SyncService(BaseDbService):
 
             if db_similar_track:
                 db_similar_track.match = match
-                logger.info(f"Updating similar track in DB: {s_name} for track {title}")
+                # logger.info(f"Updating similar track in DB: {s_name} for track {title}")
             else:
                 st = tables.SimilarTrack(
                     track_name=title,
@@ -333,10 +354,9 @@ class SyncService(BaseDbService):
                     match=match,
                 )
                 self.db.add(st)
-                logger.info(f"Adding similar track to DB: {s_name} for track {title}")
+                # logger.info(f"Adding similar track to DB: {s_name} for track {title}")
 
-        if db_commit:
-            await self.db.commit()
-            logger.info(f"Track data sync complete for {title} by {artist}.")
+        await self.db.commit()
+        logger.info(f"Track data sync complete for {title} by {artist}.")
 
 

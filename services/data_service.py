@@ -218,22 +218,24 @@ class DataService(BaseDbService):
 
     async def get_albums_with_no_ref_data(self) -> Any:
         query = (
-            select(Scrobble.album_name)
+            select(Scrobble.album_name, Scrobble.artist_name)
             .outerjoin(Album, Scrobble.album_name == Album.title)
+            .outerjoin(Artist, Scrobble.artist_name == Artist.name)
             .where(Album.title.is_(None))
             .distinct()
             .order_by(Scrobble.album_name)
         )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return result.all()
 
     async def get_tracks_with_no_ref_data(self) -> Any:
         query = (
-            select(Scrobble.track_name)
+            select(Scrobble.track_name, Scrobble.artist_name)
             .outerjoin(Track, Scrobble.track_name == Track.title)
+            .outerjoin(Artist, Scrobble.artist_name == Artist.name)
             .where(Track.title.is_(None))
             .distinct()
             .order_by(Scrobble.track_name)
         )
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return result.all()
