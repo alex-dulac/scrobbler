@@ -8,7 +8,7 @@ from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
 from config import settings
-from models.session import SessionScrobbles
+from models.session_scrobbles import SessionScrobbles
 from models.track import Track, LastFmTrack
 
 css = """

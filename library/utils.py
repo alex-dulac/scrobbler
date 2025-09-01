@@ -114,7 +114,8 @@ def clean_up_title(title: str) -> str:
         'edit',
         'deluxe',
         'reissue',
-        'explicit'
+        'explicit',
+        'album version'
     }
 
     pattern = r'\([^)]*(?:{})[^)]*\)|\[[^]]*(?:{})[^]]*\]'.format(
@@ -146,3 +147,7 @@ async def internet(timeout=3):
 
     return False
 
+def lastfm_friendly(input: str) -> str:
+    # Last.fm API has issues with '+' in artist/track/album names
+    # Because '+' is interpreted as a space, we need to encode it as '%2B'.
+    return input.replace("+", "%2B")

@@ -3,9 +3,9 @@ import time
 from fastapi import APIRouter, Query
 
 from api.state import get_app_state
-from service.lastfm_service import LastFmService, get_lastfm_account_details
-from service.apple_music_service import get_macos_information
-from service.spotify_service import SpotifyService
+from services.lastfm_service import LastFmService, get_lastfm_account_details
+from services.apple_music_service import get_macos_information
+from services.spotify_service import SpotifyService
 
 user_router = APIRouter()
 lastfm = LastFmService()
