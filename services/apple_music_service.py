@@ -47,8 +47,8 @@ async def poll_apple_music() -> AppleMusicTrack | None:
 
         if track_exists and not skip:
             apple_music_track = AppleMusicTrack(track, playing)
-            apple_music_track.clean_name = clean_up_title(apple_music_track.name)
-            apple_music_track.clean_album = clean_up_title(apple_music_track.album)
+            apple_music_track.clean_name = await clean_up_title(apple_music_track.name)
+            apple_music_track.clean_album = await clean_up_title(apple_music_track.album)
 
             return apple_music_track
         else:

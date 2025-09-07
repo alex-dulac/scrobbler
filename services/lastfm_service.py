@@ -168,26 +168,25 @@ class LastFmService:
         album = current_song.clean_album
         timestamp = int(time.time())
 
-        if artist and track and album:
-            try:
-                self.network.scrobble(
-                    artist=artist,
-                    title=track,
-                    timestamp=timestamp,
-                    album=album
-                )
-                logger.info(f"Scrobbled to LastFm: {current_song.display_name()}")
-                return LastFmTrack(
-                    name=track,
-                    clean_name=clean_up_title(track),
-                    artist=artist,
-                    album=album,
-                    clean_album=clean_up_title(album),
-                    scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
-                )
-            except pylast.PyLastError as e:
-                logger.error(f"Failed to scrobble to Last.fm: {e}")
-                return None
+        try:
+            self.network.scrobble(
+                artist=artist,
+                title=track,
+                timestamp=timestamp,
+                album=album
+            )
+            logger.info(f"Scrobbled to LastFm: {current_song.display_name()}")
+            return LastFmTrack(
+                name=track,
+                clean_name=track,
+                artist=artist,
+                album=album,
+                clean_album=album,
+                scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
+            )
+        except pylast.PyLastError as e:
+            logger.error(f"Failed to scrobble to Last.fm: {e}")
+            return None
 
     async def get_album_image_url(self, album: pylast.Album) -> str | None:
         """
@@ -211,7 +210,7 @@ class LastFmService:
             logger.error(f"Failed to get album image_url: {e}")
 
         if image_url is None:
-            clean_title = clean_up_title(album.title)
+            clean_title = await clean_up_title(album.title)
             clean_album = self.network.get_album(title=clean_title, artist=album.artist.name)
             try:
                 image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)

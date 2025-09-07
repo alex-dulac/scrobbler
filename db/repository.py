@@ -1,85 +1,40 @@
-from datetime import datetime
-from typing import Tuple, Sequence, Any
+from typing import Any
 
-from sqlalchemy import select, Select, Row
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.filters import ScrobbleFilter, build_query
 from db.tables import (
-    Scrobble,
-    Track,
     Album,
-    Artist,
-    SimilarArtist,
-    ArtistTopTrack,
-    ArtistTag,
     AlbumTag,
     AlbumTrack,
-    SimilarTrack,
-    ArtistTopAlbum
+    Artist,
+    ArtistTag,
+    ArtistTopAlbum,
+    ArtistTopTrack,
+    Scrobble,
+    Track,
+    SimilarArtist,
+    SimilarTrack
 )
-from services.base_db_service import BaseDbService
 
 
-class ScrobbleFilter:
-    def __init__(
-        self,
-        track_name: str = None,
-        artist_name: str = None,
-        album_name: str = None,
-        scrobbled_at: datetime = None,
-        scrobbled_after: str = None,
-        scrobbled_before: str = None
-    ):
-        self.track_name = track_name
-        self.artist_name = artist_name
-        self.album_name = album_name
-        self.scrobbled_at = scrobbled_at
-        self.scrobbled_after = scrobbled_after
-        self.scrobbled_before = scrobbled_before
-
-
-async def build_query(filter: ScrobbleFilter) -> Select[Tuple[Scrobble]]:
-    query = select(Scrobble)
-
-    if filter is None:
-        return query
-
-    if filter.track_name:
-        query = query.where(Scrobble.track_name == filter.track_name)
-
-    if filter.artist_name:
-        query = query.where(Scrobble.artist_name == filter.artist_name)
-
-    if filter.album_name:
-        query = query.where(Scrobble.album_name == filter.album_name)
-
-    if filter.scrobbled_at:
-        query = query.where(Scrobble.scrobbled_at == filter.scrobbled_at)
-
-    if filter.scrobbled_after:
-        after_date = datetime.strptime(filter.scrobbled_after, "%Y-%m-%d")
-        query = query.where(Scrobble.scrobbled_at >= after_date)
-
-    if filter.scrobbled_before:
-        before_date = datetime.strptime(filter.scrobbled_before, "%Y-%m-%d")
-        query = query.where(Scrobble.scrobbled_at <= before_date)
-
-    query = query.order_by(Scrobble.scrobbled_at.desc())
-
-    return query
-
-
-distinct_albums = Sequence[Row[tuple[Scrobble.album_name, Scrobble.artist_name]]]
-distinct_tracks = Sequence[Row[tuple[Scrobble.track_name, Scrobble.artist_name]]]
-
-
-class DataService(BaseDbService):
+class ScrobbleRepository:
     """
-    Service for interacting with data in the database.
+    Repository for interacting with data in the database.
     Last.fm's API is limited when it comes to querying a user's library.
     By syncing the user's scrobbles to a database, we can run sql against it.
+    This class provides methods to add and query data in the database.
     """
-    async def get_scrobbles(self, filter: ScrobbleFilter = None) -> Any:
-        query = await build_query(filter)
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def add_and_commit(self, objs: list[Any]) -> Any:
+        self.db.add_all(objs)
+        return await self.db.commit()
+
+    async def get_scrobbles(self, f: ScrobbleFilter = None) -> Any:
+        query = await build_query(f)
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -92,7 +47,7 @@ class DataService(BaseDbService):
         result = await self.db.execute(query)
         return result.scalars().all()
 
-    async def get_albums_from_scrobbles(self) -> distinct_albums:
+    async def get_albums_from_scrobbles(self) -> Any:
         query = (
             select(Scrobble.album_name, Scrobble.artist_name)
             .distinct()
@@ -101,7 +56,7 @@ class DataService(BaseDbService):
         result = await self.db.execute(query)
         return result.all()
 
-    async def get_tracks_from_scrobbles(self) -> distinct_tracks:
+    async def get_tracks_from_scrobbles(self) -> Any:
         query = (
             select(Scrobble.track_name, Scrobble.artist_name)
             .distinct()
@@ -242,3 +197,4 @@ class DataService(BaseDbService):
         )
         result = await self.db.execute(query)
         return result.all()
+

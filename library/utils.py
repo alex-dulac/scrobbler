@@ -94,7 +94,7 @@ async def validate_scrobble_in_state(state: AppState) -> bool:
     return True
 
 
-def clean_up_title(title: str) -> str:
+async def clean_up_title(title: str) -> str:
     """
     Clean up the album or song title to get the actual name.
     Examples: High 'N' Dry (Remastered 2018), Time to Break Up (Bonus Track)
@@ -146,6 +146,7 @@ async def internet(timeout=3):
                 continue
 
     return False
+
 
 def lastfm_friendly(input: str) -> str:
     # Last.fm API has issues with '+' in artist/track/album names

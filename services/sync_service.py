@@ -5,28 +5,33 @@ from pylast import WSError
 from loguru import logger
 from pylast import TopItem, Track as PylastTrack
 from sqlalchemy import Row
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import db.tables as tables
-from library.utils import lastfm_friendly
-from services.base_db_service import BaseDbService
-from services.data_service import DataService, ScrobbleFilter
+from db.filters import ScrobbleFilter
+from db.repository import ScrobbleRepository
+from library.utils import lastfm_friendly, clean_up_title
 from services.lastfm_service import LastFmService
 
 
-class SyncService(BaseDbService):
+class SyncService:
     """
-    Service to sync reference data from Last.fm API into the database.
+    Service to sync data from Last.fm API into the database.
     Db must be provided when triggered from outside an async context manager.
-    Can sync all data, or just artists, albums, or tracks.
     This has the potential to make a lot of API calls, so be mindful of usage.
     """
-    def __init__(self, db = None):
-        super().__init__(db)
+    def __init__(self, db: AsyncSession):
         self.lastfm_service = LastFmService()
-        self.data_service = DataService(db=self.db)
+        self.scrobble_repo = ScrobbleRepository(db)
 
-    async def sync_scrobbles(self, time_from, time_to) -> None:
+    async def sync_scrobbles(
+            self,
+            time_from: str = None,
+            time_to: str = None,
+            clean: bool = True
+    ) -> dict[str, int]:
         fetched = 0
+        saved = 0
         time_from = int(datetime.strptime(time_from, "%Y-%m-%d").timestamp()) if time_from else None
         time_to = int(datetime.strptime(time_to, "%Y-%m-%d").timestamp()) if time_to else None
 
@@ -43,15 +48,18 @@ class SyncService(BaseDbService):
             if not tracks:
                 break
 
+            fetched += len(tracks)
+            logger.info(f"Fetched {fetched} scrobbles...")
+
             batch_scrobbles = []
+
             for t in tracks:
-                track_name = t.track.title
+                track_name = await clean_up_title(t.track.title) if clean else t.track.title
                 artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
-                album_name = t.album if t.album else None
+                album_name = await clean_up_title(t.album) if clean and t.album else t.album
                 scrobbled_at = datetime.fromtimestamp(int(t.timestamp))
 
-                # Check if scrobble already exists
-                existing_scrobble = await self.data_service.get_scrobbles(
+                existing = await self.scrobble_repo.get_scrobbles(
                     ScrobbleFilter(
                         track_name=track_name,
                         artist_name=artist_name,
@@ -59,7 +67,7 @@ class SyncService(BaseDbService):
                         scrobbled_at=scrobbled_at
                     )
                 )
-                if existing_scrobble:
+                if existing:
                     logger.info(f"Scrobble already exists in DB: {artist_name} - {track_name} at {scrobbled_at}. Skipping.")
                     continue
 
@@ -72,11 +80,13 @@ class SyncService(BaseDbService):
                 )
                 batch_scrobbles.append(scrobble)
 
-            self.db.add_all(batch_scrobbles)
-            await self.db.commit()
+            await self.scrobble_repo.add_and_commit(batch_scrobbles)
+            saved += len(batch_scrobbles)
 
-            fetched += len(tracks)
-            logger.info(f"Fetched and saved {fetched} scrobbles...")
+            if len(batch_scrobbles) > 0:
+                logger.info(f"Saved {len(batch_scrobbles)} new scrobbles to the database.")
+            else:
+                logger.info("No new scrobbles to save from this batch.")
 
             # update time_to to the oldest timestamp from this batch - 1
             oldest = int(tracks[-1].timestamp)
@@ -84,19 +94,23 @@ class SyncService(BaseDbService):
 
             await asyncio.sleep(0.5)
 
-        logger.info(f"Done. Total fetched and saved: {fetched}")
+        logger.info(f"Done. Total fetched: {fetched}. Total saved: {saved}.")
+        return {
+            "fetched_scrobbles": fetched,
+            "new_scrobbles": saved
+        }
 
     async def sync_all_ref_data(self) -> None:
-        await self.sync_artists(True)
-        await self.sync_albums(True)
-        await self.sync_tracks(True)
+        await self.sync_artists()
+        await self.sync_albums()
+        await self.sync_tracks()
         logger.info("All data sync complete.")
 
-    async def sync_artists(self, only_missing: bool) -> None:
+    async def sync_artists(self, only_missing: bool = True) -> dict[str, int]:
         if only_missing:
-            artists = await self.data_service.get_artists_with_no_ref_data()
+            artists = await self.scrobble_repo.get_artists_with_no_ref_data()
         else:
-            artists = await self.data_service.get_artists_from_scrobbles()
+            artists = await self.scrobble_repo.get_artists_from_scrobbles()
 
         logger.info("Starting all artist data sync...")
         for artist_name in artists:
@@ -104,12 +118,13 @@ class SyncService(BaseDbService):
             await asyncio.sleep(1) # to respect Last.fm's API
 
         logger.info("Artist data sync complete.")
+        return {"synced_artists": len(artists)}
 
-    async def sync_albums(self, only_missing: bool) -> None:
+    async def sync_albums(self, only_missing: bool = True) -> dict[str, int]:
         if only_missing:
-            albums = await self.data_service.get_albums_with_no_ref_data()
+            albums = await self.scrobble_repo.get_albums_with_no_ref_data()
         else:
-            albums = await self.data_service.get_albums_from_scrobbles()
+            albums = await self.scrobble_repo.get_albums_from_scrobbles()
 
         logger.info("Starting all albums data sync...")
         for album in albums:
@@ -117,12 +132,13 @@ class SyncService(BaseDbService):
             await asyncio.sleep(1)
 
         logger.info("Album data sync complete.")
+        return {"synced_albums": len(albums)}
 
-    async def sync_tracks(self, only_missing: bool) -> None:
+    async def sync_tracks(self, only_missing: bool = True) -> dict[str, int]:
         if only_missing:
-            tracks = await self.data_service.get_tracks_with_no_ref_data()
+            tracks = await self.scrobble_repo.get_tracks_with_no_ref_data()
         else:
-            tracks = await self.data_service.get_tracks_from_scrobbles()
+            tracks = await self.scrobble_repo.get_tracks_from_scrobbles()
 
         logger.info("Starting all tracks data sync...")
         for track in tracks:
@@ -130,8 +146,10 @@ class SyncService(BaseDbService):
             await asyncio.sleep(1)
 
         logger.info("Track data sync complete.")
+        return {"synced_tracks": len(tracks)}
 
     async def sync_artist(self, artist_name: str) -> None:
+        to_db = []
         logger.info(f"Syncing artist: {artist_name}")
         lastfm_artist = self.lastfm_service.network.get_artist(
             lastfm_friendly(artist_name)
@@ -143,7 +161,7 @@ class SyncService(BaseDbService):
         user_playcount = lastfm_artist.get_userplaycount()
         listener_count = lastfm_artist.get_listener_count()
 
-        db_artist: tables.Artist = await self.data_service.get_artist(artist_name)
+        db_artist: tables.Artist = await self.scrobble_repo.get_artist(artist_name)
         if db_artist:
             db_artist.mbid = mbid
             db_artist.url = url
@@ -160,7 +178,7 @@ class SyncService(BaseDbService):
                 user_playcount=user_playcount,
                 listener_count=listener_count,
             )
-            self.db.add(a)
+            to_db.append(a)
             logger.info(f"Adding artist to DB: {artist_name}")
 
         top_tags: list[TopItem]  = lastfm_artist.get_top_tags()
@@ -168,7 +186,7 @@ class SyncService(BaseDbService):
             tag_name = tag.item.name
             weight = int(tag.weight)
 
-            db_artist_tag = await self.data_service.check_artist_tag(artist_name=artist_name, tag=tag_name)
+            db_artist_tag = await self.scrobble_repo.check_artist_tag(artist_name=artist_name, tag=tag_name)
             if db_artist_tag:
                 db_artist_tag.weight = weight
                 # logger.info(f"Updating artist tag in DB: {tag_name} for artist {artist_name}")
@@ -178,7 +196,7 @@ class SyncService(BaseDbService):
                     tag=tag_name,
                     weight=weight,
                 )
-                self.db.add(at)
+                to_db.append(at)
                 # logger.info(f"Adding artist tag to DB: {tag_name} for artist {artist_name}")
 
         similar = lastfm_artist.get_similar(limit=20)
@@ -187,7 +205,7 @@ class SyncService(BaseDbService):
             s_name = s_artist.name
             match = s.match
 
-            db_similar_artist = await self.data_service.check_similar_artist(artist_name=artist_name, similar_artist_name=s_name)
+            db_similar_artist = await self.scrobble_repo.check_similar_artist(artist_name=artist_name, similar_artist_name=s_name)
 
             if db_similar_artist:
                 # match is the only field to update
@@ -199,7 +217,7 @@ class SyncService(BaseDbService):
                     similar_artist_name=s_name,
                     match=match,
                 )
-                self.db.add(sa)
+                to_db.append(sa)
                 # logger.info(f"Adding similar artist to DB: {s_name} for artist {artist_name}")
 
         top_tracks: list[TopItem] = lastfm_artist.get_top_tracks(limit=20)
@@ -209,7 +227,7 @@ class SyncService(BaseDbService):
             track = t.item
             title = track.title
 
-            db_top_track = await self.data_service.check_artist_top_track(artist_name=artist_name, track_name=title)
+            db_top_track = await self.scrobble_repo.check_artist_top_track(artist_name=artist_name, track_name=title)
             if db_top_track:
                 db_top_track.weight = weight
                 db_top_track.rank = rank
@@ -221,7 +239,7 @@ class SyncService(BaseDbService):
                     weight=weight,
                     rank=rank
                 )
-                self.db.add(att)
+                to_db.append(att)
                 # logger.info(f"Adding top track to DB: {track.title} for artist {artist_name}")
 
         top_albums: list[TopItem] = lastfm_artist.get_top_albums(limit=20)
@@ -231,7 +249,7 @@ class SyncService(BaseDbService):
             album = a.item
             title = album.title
 
-            db_top_album = await self.data_service.check_artist_top_album(artist_name=artist_name, album_name=title)
+            db_top_album = await self.scrobble_repo.check_artist_top_album(artist_name=artist_name, album_name=title)
             if db_top_album:
                 db_top_album.weight = weight
                 db_top_album.rank = rank
@@ -243,13 +261,14 @@ class SyncService(BaseDbService):
                     weight=weight,
                     rank=rank
                 )
-                self.db.add(ata)
+                to_db.append(ata)
                 # logger.info(f"Adding top album to DB: {album.title} for artist {artist_name}")
 
-        await self.db.commit()
+        await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Artist data sync complete for {artist_name}.")
 
     async def sync_album(self, album: Row[tuple[str, str]]) -> None:
+        to_db = []
         logger.info(f"Syncing album: {album}")
         title = album[0]
         artist = album[1]
@@ -281,7 +300,7 @@ class SyncService(BaseDbService):
         user_playcount = lastfm_album.get_userplaycount()
         listener_count = lastfm_album.get_listener_count()
 
-        db_album: tables.Album = await self.data_service.get_album(album_name=title, artist_name=artist)
+        db_album: tables.Album = await self.scrobble_repo.get_album(album_name=title, artist_name=artist)
         if db_album:
             db_album.mbid = mbid
             db_album.url = url
@@ -301,7 +320,7 @@ class SyncService(BaseDbService):
                 user_playcount=user_playcount,
                 listener_count=listener_count,
             )
-            self.db.add(a)
+            to_db.append(a)
             logger.info(f"Adding album to DB: {title}")
 
         top_tags: list[TopItem] = lastfm_album.get_top_tags()
@@ -309,7 +328,7 @@ class SyncService(BaseDbService):
             tag_name = tag.item.name
             weight = int(tag.weight)
 
-            db_album_tag = await self.data_service.check_album_tag(album_name=title, tag=tag_name, artist_name=artist)
+            db_album_tag = await self.scrobble_repo.check_album_tag(album_name=title, tag=tag_name, artist_name=artist)
             if db_album_tag:
                 db_album_tag.weight = weight
                 # logger.info(f"Updating album tag in DB: {tag_name} for album {title}")
@@ -320,14 +339,14 @@ class SyncService(BaseDbService):
                     tag=tag_name,
                     weight=weight,
                 )
-                self.db.add(at)
+                to_db.append(at)
                 # logger.info(f"Adding album tag to DB: {tag_name} for album {title}")
 
         album_tracks: list[PylastTrack] = lastfm_album.get_tracks()
         for order, track in enumerate(album_tracks, start=1):
             track_title = track.title
 
-            db_album_track: tables.AlbumTrack = await self.data_service.check_album_track(album_name=title, track_name=track_title)
+            db_album_track: tables.AlbumTrack = await self.scrobble_repo.check_album_track(album_name=title, track_name=track_title)
             if db_album_track:
                 db_album_track.order = order
                 # logger.info(f"Updating track in DB: {track_title} for album {title}")
@@ -338,13 +357,14 @@ class SyncService(BaseDbService):
                     artist_name=artist,
                     order=order
                 )
-                self.db.add(at)
+                to_db.append(at)
                 # logger.info(f"Adding track to DB: {track_title} for album {title} by {artist}")
 
-        await self.db.commit()
+        await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Album data sync complete for {title} by {artist}.")
 
     async def sync_track(self, track: Row[tuple[str, str]]) -> None:
+        to_db = []
         title = track[0]
         artist = track[1]
         lastfm_track = self.lastfm_service.network.get_track(
@@ -362,7 +382,7 @@ class SyncService(BaseDbService):
         listener_count = lastfm_track.get_listener_count()
         listener_playcount = lastfm_track.get_playcount()
 
-        db_track: tables.Track = await self.data_service.get_track(track_name=title, artist_name=artist)
+        db_track: tables.Track = await self.scrobble_repo.get_track(track_name=title, artist_name=artist)
         if db_track:
             db_track.mbid = mbid
             db_track.url = url
@@ -387,7 +407,7 @@ class SyncService(BaseDbService):
                 listener_count=listener_count,
                 listener_playcount=listener_playcount,
             )
-            self.db.add(t)
+            to_db.append(t)
             logger.info(f"Adding track to DB: {title}")
 
         similar_tracks = lastfm_track.get_similar(limit=20)
@@ -397,7 +417,7 @@ class SyncService(BaseDbService):
             s_artist_name = s_track.artist.name
             match = s.match
 
-            db_similar_track = await self.data_service.check_similar_track(
+            db_similar_track = await self.scrobble_repo.check_similar_track(
                 track_name=title,
                 artist_name=artist,
                 similar_track_name=s_name,
@@ -415,10 +435,10 @@ class SyncService(BaseDbService):
                     similar_track_artist_name=s_artist_name,
                     match=match,
                 )
-                self.db.add(st)
+                to_db.append(st)
                 # logger.info(f"Adding similar track to DB: {s_name} for track {title}")
 
-        await self.db.commit()
+        await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Track data sync complete for {title} by {artist}.")
 
 

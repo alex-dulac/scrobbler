@@ -5,6 +5,7 @@ from api.spotify_router import spotify_router
 from api.data_router import data_router
 from api.scrobble_router import scrobble_router
 from api.state import get_app_state
+from api.sync_router import sync_router
 from api.user_router import user_router
 from config.security import verify_token
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
@@ -20,6 +21,7 @@ router = APIRouter(dependencies=[
 router.include_router(data_router)
 router.include_router(scrobble_router)
 router.include_router(spotify_router)
+router.include_router(sync_router)
 router.include_router(user_router)
 
 lasfm = LastFmService()
@@ -30,6 +32,7 @@ spotify = SpotifyService()
 async def get_current_song():
     app_state = await get_app_state()
     active_integration = app_state.active_integration
+    poll = None
 
     match active_integration:
         case active_integration.APPLE_MUSIC:

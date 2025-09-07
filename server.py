@@ -28,11 +28,7 @@ async def lifespan(app: FastAPI):
         await session_manager.close_db()
         logger.info("Database connection closed.")
 
-# Database connection is managed in the lifespan context manager
-# Pass it to FastAPI if you want to use the db
-# app = FastAPI(lifespan=lifespan)
-
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

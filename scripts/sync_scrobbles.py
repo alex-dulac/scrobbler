@@ -11,6 +11,8 @@ For 120k total scrobbles, this script will make 600 API calls to fetch all the d
 import argparse
 import asyncio
 
+from loguru import logger
+
 from db.db_session import session_manager
 from services.sync_service import SyncService
 
@@ -20,10 +22,11 @@ async def main(time_from: str = None, time_to: str = None):
     async with session_manager.session_factory() as db:
         try:
             sync_service = SyncService(db=db)
-            await sync_service.sync_scrobbles(
+            result = await sync_service.sync_scrobbles(
                 time_from=time_from,
                 time_to=time_to,
             )
+            logger.info(f"Sync complete. {result["new_scrobbles"]} new scrobbles added.")
 
         finally:
             await db.close()

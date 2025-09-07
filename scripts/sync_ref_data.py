@@ -9,9 +9,7 @@ with data from Last.fm's API.
 
 import asyncio
 
-from loguru import logger
-
-from db.db_session import session_manager, get_db
+from db.db_session import session_manager
 from services.sync_service import SyncService
 
 
@@ -20,12 +18,12 @@ async def main():
     async with session_manager.session_factory() as db:
         try:
             sync_service = SyncService(db=db)
-            # await sync_service.sync_all_ref_data()
+            await sync_service.sync_all_ref_data()
 
             # Alternatively, sync individual entities:
 
             # await sync_service.sync_artists()
-            await sync_service.sync_albums(True)
+            # await sync_service.sync_albums()
             # await sync_service.sync_tracks()
 
         finally:
