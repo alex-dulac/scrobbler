@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from api.dependencies import get_sync_service
+from routers.dependencies import get_sync_service
 from services.sync_service import SyncService
 
 sync_router = APIRouter()

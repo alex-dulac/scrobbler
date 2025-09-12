@@ -5,13 +5,14 @@ import sys
 
 from loguru import logger
 
-from models.integrations import Integration
-from models.session_scrobbles import SessionScrobbles
-from models.track import AppleMusicTrack, SpotifyTrack, Track
+from library.comparison import poll_comparison
+from library.integrations import Integration
+from library.session_scrobbles import SessionScrobbles
+from models.schemas import Track, AppleMusicTrack, SpotifyTrack
 from services.apple_music_service import poll_apple_music
 from services.lastfm_service import LastFmService
 from services.spotify_service import SpotifyService
-from library.utils import poll_comparison, internet
+from library.utils import internet
 
 bar = "=" * 110
 loop = True
@@ -101,7 +102,7 @@ async def run() -> None:
         playing = f"{display_name} | {time_played}"
         paused = f"{playing} | Paused"
 
-        if current_song.playing is False:
+        if not current_song.playing:
             display_status = paused
         elif current_song.scrobbled:
             display_status = scrobbled

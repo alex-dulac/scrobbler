@@ -5,9 +5,9 @@ Simple script to test/debug the ScrobbleRepository class.
 """
 import asyncio
 
-from db.db_session import session_manager
+from core.database import session_manager
 from db.filters import ScrobbleFilter
-from db.repository import ScrobbleRepository
+from repositories.repository import ScrobbleRepository
 
 
 async def main():

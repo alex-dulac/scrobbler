@@ -1,26 +1,18 @@
 from datetime import datetime
 
+from pydantic import BaseModel
 from sqlalchemy import Select, select
 
-from db.tables import Scrobble
+from models.db import Scrobble
 
 
-class ScrobbleFilter:
-    def __init__(
-            self,
-            track_name: str = None,
-            artist_name: str = None,
-            album_name: str = None,
-            scrobbled_at: datetime = None,
-            scrobbled_after: str = None,
-            scrobbled_before: str = None
-    ):
-        self.track_name = track_name
-        self.artist_name = artist_name
-        self.album_name = album_name
-        self.scrobbled_at = scrobbled_at
-        self.scrobbled_after = scrobbled_after
-        self.scrobbled_before = scrobbled_before
+class ScrobbleFilter(BaseModel):
+    track_name: str | None = None
+    artist_name: str | None = None
+    album_name: str | None = None
+    scrobbled_at: datetime | None = None
+    scrobbled_after: str | None = None  # YYYY-MM-DD
+    scrobbled_before: str | None = None  # YYYY-MM-DD
 
 
 async def build_query(f: ScrobbleFilter) -> Select[tuple[Scrobble]]:

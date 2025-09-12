@@ -3,8 +3,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.filters import ScrobbleFilter, build_query
-from db.tables import (
+from models.db import (
     Album,
     AlbumTag,
     AlbumTrack,
@@ -17,6 +16,7 @@ from db.tables import (
     SimilarArtist,
     SimilarTrack
 )
+from repositories.filters import ScrobbleFilter, build_query
 
 
 class ScrobbleRepository:

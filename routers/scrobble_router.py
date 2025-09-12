@@ -1,9 +1,8 @@
 from fastapi import APIRouter
 from loguru import logger
 
-from api.state import get_app_state
+from routers.state import get_app_state, validate_scrobble_in_state
 from services.lastfm_service import LastFmService
-from library.utils import validate_scrobble_in_state
 
 scrobble_router = APIRouter()
 lastfm = LastFmService()

@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends
 from loguru import logger
 
-from api.spotify_router import spotify_router
-from api.data_router import data_router
-from api.scrobble_router import scrobble_router
-from api.state import get_app_state
-from api.sync_router import sync_router
-from api.user_router import user_router
-from config.security import verify_token
+from core import config
+from library.comparison import poll_comparison
+from routers.spotify_router import spotify_router
+from routers.data_router import data_router
+from routers.scrobble_router import scrobble_router
+from routers.state import get_app_state
+from routers.sync_router import sync_router
+from routers.user_router import user_router
+from core.security import verify_token
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
 from services.lastfm_service import get_lastfm_account_details, LastFmService
-from library.utils import poll_comparison
 from services.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
@@ -48,15 +49,16 @@ async def get_current_song():
         data = {
             "current_song": app_state.current_song,
             "lastfm_album": app_state.lastfm_album,
-            "artist_image": app_state.artist_image,
+            "spotify_artist_image": app_state.spotify_artist_image,
         }
 
         return {"data": data}
 
     if compare.update_song:
         app_state.current_song = poll
-        spotify_artist = await spotify.get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None
-        app_state.artist_image = spotify_artist.image_url[0] if spotify_artist else None
+        if config.SPOTIFY_CLIENT_ID and app_state.current_song:
+            spotify_artist = await spotify.get_artist_from_name(app_state.current_song.artist)
+            app_state.spotify_artist_image = spotify_artist.image_url if spotify_artist else None
         logger.info(f"Updated current song: {poll.name}")
 
     if compare.update_song_playing_status:
@@ -72,7 +74,7 @@ async def get_current_song():
     data = {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
-        "artist_image": app_state.artist_image,
+        "spotify_artist_image": app_state.spotify_artist_image,
     }
 
     return {"data": data}
@@ -96,7 +98,7 @@ async def get_current_song():
 
 
 @router.get("/state/")
-async def sync():
+async def state():
     app_state = await get_app_state()
     return {
         "current_song": app_state.current_song,

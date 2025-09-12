@@ -3,10 +3,9 @@ import base64
 from applescript import AppleScript, AEType, kae, ScriptError
 from loguru import logger
 
-from models.integrations import PlaybackAction
-from models.mac_os import MacOSSystemInfo
-from models.track import AppleMusicTrack
+from library.integrations import PlaybackAction
 from library.utils import clean_up_title
+from models.schemas import AppleMusicTrack, MacOS
 
 """
 Apple Music related methods
@@ -46,7 +45,7 @@ async def poll_apple_music() -> AppleMusicTrack | None:
         skip = track_exists and (track.get(AEType(kae.keyAEName)) == 'Connecting…' or not track.get(AEType(b'pArt')))
 
         if track_exists and not skip:
-            apple_music_track = AppleMusicTrack(track, playing)
+            apple_music_track = AppleMusicTrack.from_apple_event(track, playing)
             apple_music_track.clean_name = await clean_up_title(apple_music_track.name)
             apple_music_track.clean_album = await clean_up_title(apple_music_track.album)
 
@@ -163,8 +162,8 @@ async def get_current_track_artwork_data() -> str | None:
 
 
 # Apparently, Apple Music does not provide very much information about the user account via applescript
-# Getting mac os information as an alternative
-async def get_macos_information() -> MacOSSystemInfo | None:
+# Getting macOS information as an alternative
+async def get_macos_information() -> MacOS | None:
     script = """
     set sysInfo to system info
 
@@ -184,7 +183,7 @@ async def get_macos_information() -> MacOSSystemInfo | None:
     try:
         result = AppleScript(script).run()
 
-        return MacOSSystemInfo(
+        return MacOS(
             user_name=result[0],
             long_user_name=result[1],
             user_id=result[2],

@@ -7,9 +7,9 @@ from pylast import TopItem, Track as PylastTrack
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import db.tables as tables
-from db.filters import ScrobbleFilter
-from db.repository import ScrobbleRepository
+import models.db as tables
+from repositories.filters import ScrobbleFilter
+from repositories.repository import ScrobbleRepository
 from library.utils import lastfm_friendly, clean_up_title
 from services.lastfm_service import LastFmService
 

@@ -1,12 +1,10 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-from config import settings
-from models.artist import SpotifyArtist
-from models.integrations import PlaybackAction
-from models.track import SpotifyTrack
-from models.user import SpotifyUser
+from core import config
+from library.integrations import PlaybackAction
 from library.utils import clean_up_title
+from models.schemas import SpotifyUser, SpotifyTrack, Artist
 
 scope = [
     'user-read-playback-state',
@@ -20,9 +18,9 @@ scope = [
 class SpotifyService:
     def __init__(self):
         auth = SpotifyOAuth(
-            client_id=settings.SPOTIFY_CLIENT_ID,
-            client_secret=settings.SPOTIFY_CLIENT_SECRET,
-            redirect_uri=settings.SPOTIFY_REDIRECT_URI,
+            client_id=config.SPOTIFY_CLIENT_ID,
+            client_secret=config.SPOTIFY_CLIENT_SECRET,
+            redirect_uri=config.SPOTIFY_REDIRECT_URI,
             scope=scope
         )
         self.spotify = spotipy.Spotify(auth_manager=auth)
@@ -82,11 +80,11 @@ class SpotifyService:
                 raise ValueError(f"Invalid playback action: {action}")
 
 
-    async def get_artist_from_name(self, artist_name: str) -> SpotifyArtist:
+    async def get_artist_from_name(self, artist_name: str) -> Artist:
         spotify_artist = self.spotify.search(q=artist_name, type='artist')
         artist_id = spotify_artist['artists']['items'][0]['id']
         result = self.spotify.artist(artist_id)
-        artist = SpotifyArtist(
+        artist = Artist(
             id=result['id'],
             name=result['name'],
             image_url=result['images'][0]['url']

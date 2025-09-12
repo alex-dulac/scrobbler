@@ -8,15 +8,15 @@ from textual.containers import Container
 from textual import work
 from rich.text import Text
 
-from db.db_session import session_manager
-from models.integrations import Integration, PlaybackAction
-from models.session_scrobbles import SessionScrobbles
-from models.track import Track
+from core.database import session_manager
+from library.comparison import poll_comparison, Comparison
+from library.integrations import Integration, PlaybackAction
+from library.session_scrobbles import SessionScrobbles
+from models.schemas import Track
 from services.apple_music_service import poll_apple_music, playback_control
 from services.spotify_service import SpotifyService
 from services.lastfm_service import LastFmService
 import library.textual_widgets as widgets
-from library.utils import poll_comparison, Comparison
 
 
 SCROBBLED = "✓ Scrobbled to Last.fm"

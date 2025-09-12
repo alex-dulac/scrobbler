@@ -6,19 +6,15 @@ import pylast
 import requests
 from loguru import logger
 
-from config import settings
-from models.album import LastFmAlbum
-from models.artist import LastFmArtist
-from models.lastfm_models import LastFmTopItem
-from models.track import LastFmTrack, Track
-from models.user import LastFmUser
+from core import config
 from library.utils import clean_up_title
+from models.schemas import LastFmUser, LastFmTrack, TopItem, Artist, Album, Track
 
-LASTFM_API_URL = settings.LASTFM_API_URL
-LASTFM_API_KEY = settings.LASTFM_API_KEY
-LASTFM_API_SECRET = settings.LASTFM_API_SECRET
-LASTFM_USERNAME = settings.LASTFM_USERNAME
-LASTFM_PASSWORD_HASH = pylast.md5(settings.LASTFM_PASSWORD)
+LASTFM_API_URL = config.LASTFM_API_URL
+LASTFM_API_KEY = config.LASTFM_API_KEY
+LASTFM_API_SECRET = config.LASTFM_API_SECRET
+LASTFM_USERNAME = config.LASTFM_USERNAME
+LASTFM_PASSWORD_HASH = pylast.md5(config.LASTFM_PASSWORD)
 
 
 # https://www.last.fm/api/show/user.getInfo
@@ -76,7 +72,7 @@ class LastFmService:
         playcount = format(playcount, ',')
         return playcount
 
-    async def get_user_recent_tracks(self) -> list[list[LastFmTrack | LastFmAlbum | None]]:
+    async def get_user_recent_tracks(self) -> list[tuple[LastFmTrack, Album | None]]:
         recent_tracks = self.user.get_recent_tracks(limit=20)
         tracks = []
         for track in recent_tracks:
@@ -88,7 +84,7 @@ class LastFmService:
                 name=track.track.title,
                 artist=artist_name,
                 album=album_name,
-                scrobbled_at=scrobbled_at.strftime(settings.DATETIME_FORMAT)
+                scrobbled_at=scrobbled_at.strftime(config.DATETIME_FORMAT)
             )
             a = await self.get_album(album_name, artist_name)
 
@@ -104,23 +100,23 @@ class LastFmService:
             t = LastFmTrack(
                 name=track.track.title,
                 artist=track.track.artist.name,
-                loved_at=loved_at.strftime(settings.DATETIME_FORMAT)
+                loved_at=loved_at.strftime(config.DATETIME_FORMAT)
             )
             tracks.append(t)
 
         return tracks
 
-    async def get_user_top_artists(self) -> list[LastFmTopItem]:
+    async def get_user_top_artists(self) -> list[TopItem]:
         top_artists = self.user.get_top_artists(limit=10)
         artists = []
         for artist in top_artists:
             details = artist.item
-            model = LastFmArtist(
+            model = Artist(
                 name=details.name,
                 playcount=details.get_playcount(),
                 url=details.get_url()
             )
-            top_item = LastFmTopItem(
+            top_item = TopItem(
                 name=artist.item.name,
                 weight=artist.weight,
                 details=model
@@ -129,18 +125,18 @@ class LastFmService:
 
         return artists
 
-    async def get_user_top_albums(self) -> list[LastFmTopItem]:
+    async def get_user_top_albums(self) -> list[TopItem]:
         top_albums = self.user.get_top_albums(limit=10)
         albums = []
         for album in top_albums:
             details = album.item
-            model = LastFmAlbum(
+            model = Album(
                 title=details.title,
-                artist=details.artist.name,
+                artist_name=details.artist.name,
                 image_url=details.get_cover_image(size=pylast.SIZE_LARGE),
                 url=details.get_url()
             )
-            top_item = LastFmTopItem(
+            top_item = TopItem(
                 name=album.item.title,
                 weight=album.weight,
                 details=model
@@ -182,7 +178,7 @@ class LastFmService:
                 artist=artist,
                 album=album,
                 clean_album=album,
-                scrobbled_at=datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
+                scrobbled_at=datetime.fromtimestamp(timestamp).strftime(config.DATETIME_FORMAT)
             )
         except pylast.PyLastError as e:
             logger.error(f"Failed to scrobble to Last.fm: {e}")
@@ -219,15 +215,15 @@ class LastFmService:
 
         return image_url
 
-    async def get_album(self, title: str, artist: str) -> LastFmAlbum | None:
+    async def get_album(self, title: str, artist: str) -> Album | None:
         album = self.network.get_album(title=title, artist=artist)
 
         image_url = await self.get_album_image_url(album)
 
         if album:
-            return LastFmAlbum(
+            return Album(
                 title=album.title,
-                artist=album.artist.name,
+                artist_name=album.artist.name,
                 image_url=image_url,
                 url=album.get_url()
             )
@@ -246,7 +242,7 @@ class LastFmService:
 
             for t in track_scrobbles:
                 timestamp = int(t.timestamp)
-                timestamp = datetime.fromtimestamp(timestamp).strftime(settings.DATETIME_FORMAT)
+                timestamp = datetime.fromtimestamp(timestamp).strftime(config.DATETIME_FORMAT)
                 track = LastFmTrack(
                     name=t.track.title,
                     artist=t.track.artist.name,

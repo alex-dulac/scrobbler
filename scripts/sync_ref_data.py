@@ -9,7 +9,7 @@ with data from Last.fm's API.
 
 import asyncio
 
-from db.db_session import session_manager
+from core.database import session_manager
 from services.sync_service import SyncService
 
 
