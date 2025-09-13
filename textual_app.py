@@ -8,15 +8,15 @@ from textual.containers import Container
 from textual import work
 from rich.text import Text
 
-from db.db_session import session_manager
-from models.integrations import Integration, PlaybackAction
-from models.session_scrobbles import SessionScrobbles
-from models.track import Track
+from core.database import session_manager
+from library.comparison import Comparison
+from library.integrations import Integration, PlaybackAction
+from library.session_scrobbles import SessionScrobbles
+from models.schemas import Track
 from services.apple_music_service import poll_apple_music, playback_control
 from services.spotify_service import SpotifyService
 from services.lastfm_service import LastFmService
 import library.textual_widgets as widgets
-from library.utils import poll_comparison, Comparison
 
 
 SCROBBLED = "✓ Scrobbled to Last.fm"
@@ -186,7 +186,7 @@ class ScrobblerApp(App):
     async def update_display(self) -> None:
         poll_service = poll_apple_music if self.active_integration == Integration.APPLE_MUSIC else self.spotify.poll_spotify
         poll: Track = await poll_service()
-        compare: Comparison = await poll_comparison(poll, self.current_song)
+        compare = Comparison(poll=poll, current_song=self.current_song)
 
         if compare.no_song_playing:
             if self.current_song:
@@ -196,7 +196,7 @@ class ScrobblerApp(App):
             self.update_progress_bar(0, NOT_PLAYING)
             return
 
-        if compare.update_song:
+        if compare.song_has_changed:
             self.current_song = poll
             self.current_song.time_played = 0
             scrobbles = await self.lastfm.current_track_user_scrobbles(self.current_song)
@@ -208,11 +208,11 @@ class ScrobblerApp(App):
         if compare.update_song_playing_status:
             self.current_song.playing = poll.playing
 
-        threshold = self.current_song.get_scrobbled_threshold()
+        threshold = self.current_song.scrobble_threshold
         progress_value = min(1.0, self.current_song.time_played / threshold)
         progress_text = f"{self.current_song.time_played}s / {threshold}s"
 
-        if self.current_song.playing is False:
+        if not self.current_song.playing:
             self.update_song_info(self.format_song_info(self.current_song, PAUSED))
             self.update_progress_bar(progress_value, f"{progress_text} ({PAUSED})")
         elif self.current_song.scrobbled:
@@ -223,7 +223,7 @@ class ScrobblerApp(App):
             self.update_song_info(self.format_song_info(self.current_song))
             self.update_progress_bar(progress_value, progress_text)
 
-            if self.current_song.is_ready_to_be_scrobbled() and not self.is_scrobbling:
+            if self.current_song.is_ready_to_be_scrobbled and not self.is_scrobbling:
                 self.is_scrobbling = True
                 scrobbled_track = await self.lastfm.scrobble(self.current_song)
                 if scrobbled_track:

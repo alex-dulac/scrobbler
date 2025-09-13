@@ -5,13 +5,14 @@ import sys
 
 from loguru import logger
 
-from models.integrations import Integration
-from models.session_scrobbles import SessionScrobbles
-from models.track import AppleMusicTrack, SpotifyTrack, Track
+from library.comparison import Comparison
+from library.integrations import Integration
+from library.session_scrobbles import SessionScrobbles
+from models.schemas import Track, AppleMusicTrack, SpotifyTrack
 from services.apple_music_service import poll_apple_music
 from services.lastfm_service import LastFmService
 from services.spotify_service import SpotifyService
-from library.utils import poll_comparison, internet
+from library.utils import internet
 
 bar = "=" * 110
 loop = True
@@ -26,14 +27,14 @@ def new_line() -> None:
 
 
 def clear_line() -> None:
-    sys.stdout.write("\r" + " " * 110 + "\r")
+    sys.stdout.write("\r" + " " * len(bar) + "\r")
     sys.stdout.flush()
 
 
 async def log_current_song(current_song: Track) -> None:
     logger.info(f"{active_integration.normalized_name()} currently playing:")
-    logger.info(f"  {current_song.display_name()}")
-    logger.info(f"Scrobble threshold: {current_song.get_scrobbled_threshold()}")
+    logger.info(f"  {current_song.display_name}")
+    logger.info(f"Scrobble threshold: {current_song.scrobble_threshold}")
 
     if not await internet():
         logger.info("No internet connection. Cannot get scrobbles for current track...")
@@ -69,7 +70,7 @@ async def run() -> None:
 
     while loop:
         poll = await poll_service()
-        compare = await poll_comparison(poll, current_song)
+        compare = Comparison(poll=poll, current_song=current_song)
 
         if compare.no_song_playing:
             if current_song:
@@ -79,7 +80,7 @@ async def run() -> None:
             await asyncio.sleep(1)
             continue
 
-        if compare.update_song:
+        if compare.song_has_changed:
             current_song = poll
             current_song.time_played = 0
             new_line()
@@ -93,7 +94,7 @@ async def run() -> None:
         if compare.update_song_playing_status:
             current_song.playing = poll.playing
 
-        display_name = f" {current_song.display_name()}"
+        display_name = f" {current_song.display_name}"
         time_played = f"Time played: {current_song.time_played}s"
 
         scrobbled = f"{display_name} | Scrobbled"
@@ -101,14 +102,14 @@ async def run() -> None:
         playing = f"{display_name} | {time_played}"
         paused = f"{playing} | Paused"
 
-        if current_song.playing is False:
+        if not current_song.playing:
             display_status = paused
         elif current_song.scrobbled:
             display_status = scrobbled
         else:
             current_song.time_played += 1
             display_status = playing
-            if current_song.is_ready_to_be_scrobbled():
+            if current_song.is_ready_to_be_scrobbled:
                 if not await internet():
                     display_status = pending
                     session.add_pending(current_song)
@@ -121,6 +122,7 @@ async def run() -> None:
                         logger.info(f"Scrobble Count: {session.count}")
                         display_status = scrobbled
 
+        clear_line()
         print(display_status, end="\r")
         await asyncio.sleep(1)
 

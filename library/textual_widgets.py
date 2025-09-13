@@ -7,9 +7,9 @@ from rich.table import Table
 from textual.containers import ScrollableContainer
 from textual.widgets import Static
 
-from config import settings
-from models.session_scrobbles import SessionScrobbles
-from models.track import Track, LastFmTrack
+from core import config
+from library.session_scrobbles import SessionScrobbles
+from models.schemas import Track, LastFmTrack
 
 css = """
     Button {
@@ -95,16 +95,16 @@ class HistoryListWidget(ScrollableContainer):
             return
 
         if not scrobbles:
-            self.update(f"No previous scrobbles found for: {current_song.display_name()}")
+            self.update(f"No previous scrobbles found for: {current_song.display_name}")
             return
 
-        table = Table(title=f"Scrobble History for: {current_song.display_name()}", expand=True)
+        table = Table(title=f"Scrobble History for: {current_song.display_name}", expand=True)
         table.add_column("#", style="dim", width=4)
         table.add_column("Timestamp", style="cyan")
 
         for i, scrobble in enumerate(scrobbles):
-            dt = datetime.strptime(scrobble.scrobbled_at, settings.DATETIME_FORMAT)
-            timestamp = dt.strftime(settings.DATETIME_FORMAT)
+            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
+            timestamp = dt.strftime(config.DATETIME_FORMAT)
             table.add_row(
                 str(i + 1),
                 timestamp
@@ -142,18 +142,18 @@ class HistoryChartWidget(ScrollableContainer):
             return
 
         if not scrobbles:
-            self.update(f"No previous scrobbles found for: {current_song.display_name()}")
+            self.update(f"No previous scrobbles found for: {current_song.display_name}")
             return
 
         year_counts = defaultdict(int)
         for scrobble in scrobbles:
-            dt = datetime.strptime(scrobble.scrobbled_at, settings.DATETIME_FORMAT)
+            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
             year_counts[dt.year] += 1
 
         current_year = datetime.now().year
         all_years = range(start_year, current_year + 1)
 
-        chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name()}", expand=True)
+        chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name}", expand=True)
         chart_table.add_column("Year", style="cyan", width=8)
         chart_table.add_column("Count", style="white", width=8)
         chart_table.add_column("Chart", style="green")

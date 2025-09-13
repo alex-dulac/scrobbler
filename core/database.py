@@ -2,8 +2,9 @@ from typing import Optional, AsyncGenerator
 
 from sqlalchemy import AsyncAdaptedQueuePool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine, AsyncSession
-from config import settings
-from db.tables import Base
+
+from core import config
+from models.db import Base
 
 
 class SessionManager:
@@ -13,7 +14,7 @@ class SessionManager:
 
     async def init_db(self) -> None:
         self.engine = create_async_engine(
-            url=settings.DATABASE_URL,
+            url=config.DATABASE_URL,
             poolclass=AsyncAdaptedQueuePool,
             pool_pre_ping=True,
         )

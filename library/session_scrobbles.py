@@ -2,7 +2,7 @@ from collections import Counter
 from typing import List, Dict
 from loguru import logger
 
-from models.track import Track, LastFmTrack
+from models.schemas import LastFmTrack, Track
 from services.lastfm_service import LastFmService
 from library.utils import internet
 

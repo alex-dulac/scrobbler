@@ -5,9 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from loguru import logger
 
-from config import settings
-from api.router import router
-from db.db_session import session_manager
+from core import config
+from routers.router import router
+from core.database import session_manager
 
 
 @asynccontextmanager
@@ -32,7 +32,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.WEB_APP_URL],
+    allow_origins=[config.WEB_APP_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

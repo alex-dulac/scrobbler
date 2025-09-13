@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette import status
 
-from config import settings
+from core import config
 
 
 class CustomHTTPBearer(HTTPBearer):
@@ -26,8 +26,7 @@ class CustomHTTPBearer(HTTPBearer):
     async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
         try:
             credentials: HTTPAuthorizationCredentials = await super().__call__(request)
-            if credentials:
-                return credentials
+            return credentials
         except HTTPException:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,7 +41,7 @@ http_scheme = CustomHTTPBearer()
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(http_scheme)):
     token = credentials.credentials
 
-    if token != settings.APP_TOKEN:
+    if token != config.APP_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",

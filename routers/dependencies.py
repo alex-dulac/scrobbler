@@ -1,4 +1,4 @@
-from db.db_session import get_db
+from core.database import get_db
 from services.sync_service import SyncService
 
 

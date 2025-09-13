@@ -1,16 +1,17 @@
 from fastapi import APIRouter, Depends
 from loguru import logger
 
-from api.spotify_router import spotify_router
-from api.data_router import data_router
-from api.scrobble_router import scrobble_router
-from api.state import get_app_state
-from api.sync_router import sync_router
-from api.user_router import user_router
-from config.security import verify_token
+from core import config
+from core.security import verify_token
+from library.comparison import Comparison
+from routers.spotify_router import spotify_router
+from routers.data_router import data_router
+from routers.scrobble_router import scrobble_router
+from routers.state import get_app_state
+from routers.sync_router import sync_router
+from routers.user_router import user_router
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
 from services.lastfm_service import get_lastfm_account_details, LastFmService
-from library.utils import poll_comparison
 from services.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
@@ -42,44 +43,51 @@ async def get_current_song():
         case _:
             raise ValueError("Invalid active integration")
 
-    compare = await poll_comparison(poll, app_state.current_song, app_state.lastfm_album)
+    compare = Comparison(
+        poll=poll,
+        current_song=app_state.current_song,
+        lastfm_album=app_state.lastfm_album
+    )
 
     if compare.is_same_song:
+        if compare.update_song_playing_status:
+            app_state.current_song.playing = poll.playing
+            logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
+
         data = {
             "current_song": app_state.current_song,
             "lastfm_album": app_state.lastfm_album,
-            "artist_image": app_state.artist_image,
+            "spotify_artist_image": app_state.spotify_artist_image,
         }
 
         return {"data": data}
 
-    if compare.update_song:
+    if compare.song_has_changed:
         app_state.current_song = poll
-        spotify_artist = await spotify.get_artist_from_name(app_state.current_song.artist) if app_state.current_song else None
-        app_state.artist_image = spotify_artist.image_url[0] if spotify_artist else None
         logger.info(f"Updated current song: {poll.name}")
-
-    if compare.update_song_playing_status:
-        app_state.current_song.playing = poll.playing
-        logger.info(f"Updated '{poll.name}' playing status: {poll.playing}")
+        if config.SPOTIFY_CLIENT_ID and app_state.current_song is not None:
+            spotify_artist = await spotify.get_artist_from_name(app_state.current_song.artist)
+            app_state.spotify_artist_image = spotify_artist.image_url if spotify_artist else None
 
     if compare.update_lastfm_now_playing:
         app_state.current_song.lastfm_updated_now_playing = await lasfm.update_now_playing(app_state.current_song)
+        logger.info(f"Updated Last.fm now playing status for '{app_state.current_song.name}'")
 
     if compare.update_lastfm_album:
         app_state.lastfm_album = await lasfm.get_album(app_state.current_song.album, app_state.current_song.artist)
+        logger.info(f"Updated Last.fm album info: {app_state.lastfm_album.title if app_state.lastfm_album else 'None'}")
 
     data = {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
-        "artist_image": app_state.artist_image,
+        "spotify_artist_image": app_state.spotify_artist_image,
     }
 
     return {"data": data}
 
 
 @router.get("/poll-song/artwork")
-async def get_current_song():
+async def get_current_song_artwork():
     app_state = await get_app_state()
     active_integration = app_state.active_integration
     artwork = None
@@ -96,7 +104,7 @@ async def get_current_song():
 
 
 @router.get("/state/")
-async def sync():
+async def state():
     app_state = await get_app_state()
     return {
         "current_song": app_state.current_song,
