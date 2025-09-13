@@ -55,18 +55,23 @@ class Track(BaseModel):
     def _default_clean_album(cls, v, info):
         return v if v is not None else info.data.get("album")
 
+    @property
     def has_clean_name(self) -> bool:
         return self.name != self.clean_name
 
+    @property
     def display_name(self) -> str:
         return f"`{self.clean_name}` by {self.artist} from `{self.clean_album}`"
 
-    def get_scrobbled_threshold(self) -> int:
+    @property
+    def scrobble_threshold(self) -> int:
         return min(round(self.duration / 2), 120) if self.duration else 120
 
+    @property
     def is_ready_to_be_scrobbled(self) -> bool:
-        return self.playing and not self.scrobbled and self.time_played >= self.get_scrobbled_threshold()
+        return self.playing and not self.scrobbled and self.time_played >= self.scrobble_threshold
 
+    @property
     def time_remaining(self) -> int:
         return max(self.duration - self.time_played, 0)
 
@@ -159,26 +164,6 @@ class LastFmUser(User):
     registered: Optional[datetime] = None
     subscriber: bool = False
     track_count: Optional[str] = None
-
-    @field_validator("album_count", "artist_count", "playcount", "track_count", mode="before")
-    def _coerce_ints(cls, v):
-        if v is None or v == "":
-            return None
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return None
-
-    @field_validator("registered", mode="before")
-    def _parse_registered(cls, v):
-        if v is None or v == "":
-            return None
-        if isinstance(v, datetime):
-            return v
-        try:
-            return datetime.fromisoformat(v)
-        except Exception:
-            return None
 
 
 class SpotifyUser(User):

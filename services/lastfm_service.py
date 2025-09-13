@@ -171,7 +171,7 @@ class LastFmService:
                 timestamp=timestamp,
                 album=album
             )
-            logger.info(f"Scrobbled to LastFm: {current_song.display_name()}")
+            logger.info(f"Scrobbled to LastFm: {current_song.display_name}")
             return LastFmTrack(
                 name=track,
                 clean_name=track,
@@ -236,7 +236,7 @@ class LastFmService:
 
             # make multiple calls for "Cool Song", "Cool Song (Remastered 2021)", etc...
             track_scrobbles = self.user.get_track_scrobbles(current_song.artist, current_song.name)
-            if current_song.has_clean_name():
+            if current_song.has_clean_name:
                 clean_track_scrobbles = self.user.get_track_scrobbles(current_song.artist, current_song.clean_name)
                 track_scrobbles.extend(clean_track_scrobbles)
 
@@ -254,7 +254,7 @@ class LastFmService:
             return tracks
 
         except pylast.PyLastError as e:
-            logger.error(f"Failed to get user scrobbles for {current_song.display_name()}")
+            logger.error(f"Failed to get user scrobbles for {current_song.display_name}")
             logger.error(f"Error: {e}")
             return False
 

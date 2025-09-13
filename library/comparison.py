@@ -4,51 +4,33 @@ from models.schemas import Track, Album
 
 
 class Comparison(BaseModel):
-    no_song_playing: bool = False
-    is_same_song: bool = False
-    update_song: bool = False
-    update_song_playing_status: bool = False
-    update_lastfm_now_playing: bool = False
-    update_lastfm_album: bool = False
+    poll: Track | None = None
+    current_song: Track | None = None
+    lastfm_album: Album | None = None
 
+    @property
+    def no_song_playing(self) -> bool:
+        return not self.poll
 
-def song_has_changed(poll: Track | None, current_song: Track | None) -> bool:
-    return poll and (not current_song or poll.name != current_song.name)
+    @property
+    def song_has_changed(self) -> bool:
+        return self.poll and (not self.current_song or self.poll.name != self.current_song.name)
 
+    @property
+    def is_same_song(self) -> bool:
+        return self.poll and self.current_song and self.poll.name == self.current_song.name and self.poll.artist == self.current_song.artist
 
-def is_same_song(poll: Track | None, current_song: Track | None) -> bool:
-    return (current_song
-            and poll
-            and current_song.name == poll.name
-            and poll.artist == current_song.artist)
+    @property
+    def update_song_playing_status(self) -> bool:
+        return self.is_same_song and self.poll.playing != self.current_song.playing
 
+    @property
+    def update_lastfm_now_playing(self):
+        playing = self.current_song.playing if self.current_song else False
+        already_updated = self.current_song.lastfm_updated_now_playing if self.current_song else False
+        return self.song_has_changed or (playing and not already_updated)
 
-async def poll_comparison(
-        poll: Track | None,
-        current_song: Track | None,
-        lastfm_album: Album | None = None
-) -> Comparison:
-    if not poll:
-        return Comparison(no_song_playing=True)
+    @property
+    def update_lastfm_album(self):
+        return self.song_has_changed or (self.poll and (self.lastfm_album is None or self.current_song.album != self.lastfm_album.title))
 
-    if is_same_song(poll, current_song):
-        update_song_playing_status = poll.playing != current_song.playing
-        return Comparison(is_same_song=True, update_song_playing_status=update_song_playing_status)
-
-    update_song = song_has_changed(poll, current_song)
-
-    update_lastfm_now_playing = (
-            update_song or
-            (current_song and current_song.playing and not current_song.lastfm_updated_now_playing)
-    )
-
-    update_lastfm_album = (
-            update_song or
-            (poll and (lastfm_album is None or current_song.album != lastfm_album.title))
-    )
-
-    return Comparison(
-        update_song=update_song,
-        update_lastfm_now_playing=update_lastfm_now_playing,
-        update_lastfm_album=update_lastfm_album,
-    )

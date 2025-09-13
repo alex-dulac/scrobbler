@@ -61,6 +61,7 @@ async def playback_control(action: PlaybackAction) -> bool:
     """
     Control Apple Music playback.
     """
+    applescript_command = None
     match action:
         case PlaybackAction.PAUSE:
             applescript_command = "playpause"
@@ -70,6 +71,9 @@ async def playback_control(action: PlaybackAction) -> bool:
             applescript_command = "previous track"
         case _:
             raise ValueError(f"Invalid playback action: {action}")
+
+    if applescript_command is None:
+        return False
 
     script = f"""
     tell application "Music"
