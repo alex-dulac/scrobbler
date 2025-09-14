@@ -2,7 +2,7 @@ import time
 
 from fastapi import APIRouter, Query
 
-from routers.state import get_app_state
+from library.state import get_app_state
 from services.lastfm_service import LastFmService, get_lastfm_account_details
 from services.apple_music_service import get_macos_information
 from services.spotify_service import SpotifyService
@@ -13,12 +13,12 @@ spotify = SpotifyService()
 
 @user_router.get("/user/")
 async def user():
-    return {"user": await get_lastfm_account_details()}
+    return {"user": get_lastfm_account_details()}
 
 
 @user_router.get("/user/accounts/lastfm")
 async def user_lastfm():
-    return {"user": await get_lastfm_account_details()}
+    return {"user": get_lastfm_account_details()}
 
 
 @user_router.get("/user/accounts/apple/")

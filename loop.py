@@ -19,7 +19,7 @@ loop = True
 active_integration = Integration.APPLE_MUSIC
 lastfm = LastFmService()
 spotify = SpotifyService()
-session = SessionScrobbles(lastfm)
+session = SessionScrobbles()
 
 
 def new_line() -> None:

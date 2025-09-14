@@ -1,11 +1,12 @@
 from collections import defaultdict
 from datetime import datetime
+from enum import Enum
 
 from rich.console import RenderableType, Group
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
-from textual.containers import ScrollableContainer
-from textual.widgets import Static
+from textual.containers import ScrollableContainer, Container
+from textual.widgets import Static, Button
 
 from core import config
 from library.session_scrobbles import SessionScrobbles
@@ -42,6 +43,33 @@ css = """
     """
 
 
+class TuiViews(str, Enum):
+    HISTORY_LIST = "history-list"
+    HISTORY_CHART = "history-chart"
+    SESSION = "session-info"
+
+
+playback_controls = Container(
+    Button("Apple Music", id="apple-music", classes="active-button"),
+    Button("Spotify", id="spotify"),
+    Button("⏯ Play/Pause", id="play-pause"),
+    Button("⏮ Back", id="previous-track"),
+    Button("⏭ Skip", id="next-track"),
+    Button("Quit", id="quit", variant="error"),
+    classes="controls",
+    id="controls"
+)
+
+
+view_controls = Container(
+    Button("History List", id="show-history-list"),
+    Button("History Chart", id="show-history-chart"),
+    Button("Session", id="show-session"),
+    classes="controls",
+    id="view-controls"
+)
+
+
 class SongInfoWidget(Static):
     def render(self) -> RenderableType:
         return self.renderable
@@ -75,7 +103,7 @@ class HistoryContent(Static):
 class HistoryListWidget(ScrollableContainer):
     def __init__(self, id=None):
         super().__init__(id=id, classes="content-container")
-        self.content = HistoryContent(id="history-list")
+        self.content = HistoryContent(id=TuiViews.HISTORY_LIST)
 
     def on_mount(self) -> None:
         self.mount(self.content)
@@ -122,22 +150,29 @@ class HistoryListWidget(ScrollableContainer):
 class HistoryChartWidget(ScrollableContainer):
     def __init__(self, id=None):
         super().__init__(id=id, classes="content-container")
-        self.content = HistoryContent(id="history-chart")
+        self.content = HistoryContent(id=TuiViews.HISTORY_CHART)
+        self.start_year: int = datetime.today().year
+        self.current_year: int = datetime.today().year
+        self.all_years = range(self.start_year, self.current_year + 1)
 
     def on_mount(self) -> None:
         self.mount(self.content)
         self.content.update("No song selected")
 
+    def set_years(self, start_year: int):
+        self.start_year = start_year
+        self.all_years = range(self.start_year, self.current_year + 1)
+
     def update(self, renderable):
         if hasattr(self, "content") and self.content.is_mounted:
             self.content.update(renderable)
 
-    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack], start_year: int) -> None:
+    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack]) -> None:
         if not current_song:
             self.update("No song selected")
             return
 
-        if scrobbles is False:
+        if not scrobbles:
             self.update("Failed to load scrobble history")
             return
 
@@ -150,9 +185,6 @@ class HistoryChartWidget(ScrollableContainer):
             dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
             year_counts[dt.year] += 1
 
-        current_year = datetime.now().year
-        all_years = range(start_year, current_year + 1)
-
         chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name}", expand=True)
         chart_table.add_column("Year", style="cyan", width=8)
         chart_table.add_column("Count", style="white", width=8)
@@ -161,7 +193,7 @@ class HistoryChartWidget(ScrollableContainer):
         # get max count for bar scaling
         max_count = max(year_counts.values()) if year_counts else 1
 
-        for year in all_years:
+        for year in self.all_years:
             count = year_counts.get(year, 0)
             if count > 0:
                 bar_width = int((count / max_count) * 50)
@@ -174,7 +206,7 @@ class HistoryChartWidget(ScrollableContainer):
 
         chart_table.add_section()
         total_scrobbles = sum(year_counts.values())
-        avg_per_year = total_scrobbles / len(all_years)
+        avg_per_year = total_scrobbles / len(self.all_years)
 
         summary_table = Table(title="Additional Stats", width=60)
         summary_table.add_column("Metric", style="dim")

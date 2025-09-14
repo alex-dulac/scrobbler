@@ -1,10 +1,8 @@
 import asyncio
-from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.visual import VisualType
 from textual.widgets import Header, Footer, Button
-from textual.containers import Container
 from textual import work
 from rich.text import Text
 
@@ -12,6 +10,7 @@ from core.database import session_manager
 from library.comparison import Comparison
 from library.integrations import Integration, PlaybackAction
 from library.session_scrobbles import SessionScrobbles
+from library.state import AppState
 from models.schemas import Track
 from services.apple_music_service import poll_apple_music, playback_control
 from services.spotify_service import SpotifyService
@@ -31,44 +30,23 @@ class ScrobblerApp(App):
 
     def __init__(self):
         super().__init__()
-        self.active_integration = Integration.APPLE_MUSIC
-        self.lastfm = LastFmService()
-        self.spotify = SpotifyService()
-        self.current_song = None
-        self.session = SessionScrobbles(self.lastfm)
-        self.current_view = "history-chart"
-        self.is_scrobbling = False # mitigate duplicate scrobbles
-        self.start_year = None
-        self.db_connected = False
+        self.state: AppState = AppState()
+        self.lastfm: LastFmService = LastFmService()
+        self.spotify: SpotifyService = SpotifyService()
+        self.session: SessionScrobbles = SessionScrobbles()
+        self.poll_service = poll_apple_music
+        self.current_view = widgets.TuiViews.HISTORY_CHART
+        self.db_connected: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header()
-        # playback controls
-        yield Container(
-            Button("Apple Music", id="apple-music", classes="active-button"),
-            Button("Spotify", id="spotify"),
-            Button("⏯ Play/Pause", id="play-pause"),
-            Button("⏮ Back", id="previous-track"),
-            Button("⏭ Skip", id="next-track"),
-            Button("Quit", id="quit", variant="error"),
-            classes="controls",
-            id="controls"
-        )
-        # view controls
-        yield Container(
-            Button("History List", id="show-history-list"),
-            Button("History Chart", id="show-history-chart"),
-            Button("Session", id="show-session"),
-            classes="controls",
-            id="view-controls"
-        )
-        # song info and progress bar
+        yield widgets.playback_controls
+        yield widgets.view_controls
         yield widgets.SongInfoWidget(id="song-info")
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
-        # views
-        yield widgets.HistoryListWidget(id="history-list")
-        yield widgets.HistoryChartWidget(id="history-chart")
-        yield widgets.SessionInfoWidget(self.session, id="session-info")
+        yield widgets.HistoryListWidget(id=widgets.TuiViews.HISTORY_LIST)
+        yield widgets.HistoryChartWidget(id=widgets.TuiViews.HISTORY_CHART)
+        yield widgets.SessionInfoWidget(self.session, id=widgets.TuiViews.SESSION)
         yield Footer()
 
     def update_progress_bar(self, progress_value: float, progress_text: str) -> None:
@@ -88,9 +66,7 @@ class ScrobblerApp(App):
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
 
-        registered = self.lastfm.user.get_registered()
-        self.start_year = datetime.fromtimestamp(int(registered)).year
-
+        self.query_one(widgets.HistoryChartWidget).set_years(self.state.user.registered.year)
         self.set_interval(1, self.update_display)
         self.update_song_info(WAITING)
         self.update_progress_bar(0, WAITING)
@@ -98,19 +74,19 @@ class ScrobblerApp(App):
         self.update_view_visibility()
 
     def update_view_visibility(self) -> None:
-        history_list = self.query_one("#history-list")
-        history_chart = self.query_one("#history-chart")
-        session = self.query_one("#session-info")
+        history_list = self.get_widget_by_id(widgets.TuiViews.HISTORY_LIST.value)
+        history_chart = self.get_widget_by_id(widgets.TuiViews.HISTORY_CHART.value)
+        session = self.get_widget_by_id(widgets.TuiViews.SESSION.value)
 
-        if self.current_view == "history-list":
+        if self.current_view == widgets.TuiViews.HISTORY_LIST:
             history_list.display = True
             history_chart.display = False
             session.display = False
-        elif self.current_view == "history-chart":
+        elif self.current_view == widgets.TuiViews.HISTORY_CHART:
             history_list.display = False
             history_chart.display = True
             session.display = False
-        elif self.current_view == "session-info":
+        elif self.current_view == widgets.TuiViews.SESSION:
             history_list.display = False
             history_chart.display = False
             session.display = True
@@ -127,30 +103,32 @@ class ScrobblerApp(App):
         if self.db_connected:
             await session_manager.close_db()
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(1)
         self.exit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         # main
         if event.button.id == "apple-music":
-            self.active_integration = Integration.APPLE_MUSIC
+            self.state.active_integration = Integration.APPLE_MUSIC
+            self.poll_service = poll_apple_music
             self.query_one("#apple-music").add_class("active-button")
             self.query_one("#spotify").remove_class("active-button")
         elif event.button.id == "spotify":
-            self.active_integration = Integration.SPOTIFY
+            self.state.active_integration = Integration.SPOTIFY
+            self.poll_service = self.spotify.poll_spotify
             self.query_one("#spotify").add_class("active-button")
             self.query_one("#apple-music").remove_class("active-button")
         elif event.button.id == "quit":
             self.action_quit()
         # views
         elif event.button.id == "show-history-list":
-            self.current_view = "history-list"
+            self.current_view = widgets.TuiViews.HISTORY_LIST
             self.update_view_visibility()
         elif event.button.id == "show-history-chart":
-            self.current_view = "history-chart"
+            self.current_view = widgets.TuiViews.HISTORY_CHART
             self.update_view_visibility()
         elif event.button.id == "show-session":
-            self.current_view = "session-info"
+            self.current_view = widgets.TuiViews.SESSION
             self.update_view_visibility()
         # playback
         elif event.button.id == "play-pause":
@@ -162,9 +140,9 @@ class ScrobblerApp(App):
 
     @work
     async def playback_control(self, action: PlaybackAction) -> None:
-        if self.active_integration == Integration.APPLE_MUSIC:
+        if self.state.active_integration == Integration.APPLE_MUSIC:
             await playback_control(action)
-        elif self.active_integration == Integration.SPOTIFY:
+        elif self.state.active_integration == Integration.SPOTIFY:
             result = await self.spotify.playback_control(action)
             if result is False:
                 self.notify("Failed to control playback. Spotify Premium required.")
@@ -184,59 +162,74 @@ class ScrobblerApp(App):
 
     @work
     async def update_display(self) -> None:
-        poll_service = poll_apple_music if self.active_integration == Integration.APPLE_MUSIC else self.spotify.poll_spotify
-        poll: Track = await poll_service()
-        compare = Comparison(poll=poll, current_song=self.current_song)
+        poll: Track = await self.poll_service()
+        compare = Comparison(poll=poll, current_song=self.state.current_song)
 
         if compare.no_song_playing:
-            if self.current_song:
-                self.current_song = None
+            self.state.current_song = None
             self.update_song_info(NOT_PLAYING)
             self.query_one(widgets.HistoryListWidget).update(NOT_PLAYING)
             self.update_progress_bar(0, NOT_PLAYING)
             return
 
         if compare.song_has_changed:
-            self.current_song = poll
-            self.current_song.time_played = 0
-            scrobbles = await self.lastfm.current_track_user_scrobbles(self.current_song)
-            self.query_one(widgets.HistoryListWidget).update_list(self.current_song, scrobbles)
-            self.query_one(widgets.HistoryChartWidget).update_chart(self.current_song, scrobbles, self.start_year)
+            self.state.current_song = poll
+            self.state.current_song.time_played = 0
+            scrobbles = await self.lastfm.current_track_user_scrobbles(self.state.current_song)
+            self.query_one(widgets.HistoryListWidget).update_list(self.state.current_song, scrobbles)
+            self.query_one(widgets.HistoryChartWidget).update_chart(self.state.current_song, scrobbles)
             if compare.update_lastfm_now_playing:
-                self.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.current_song)
+                self.state.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.state.current_song)
 
         if compare.update_song_playing_status:
-            self.current_song.playing = poll.playing
+            self.state.current_song.playing = poll.playing
 
-        threshold = self.current_song.scrobble_threshold
-        progress_value = min(1.0, self.current_song.time_played / threshold)
-        progress_text = f"{self.current_song.time_played}s / {threshold}s"
+        threshold = self.state.current_song.scrobble_threshold
+        progress_value = min(1.0, self.state.current_song.time_played / threshold)
+        progress_text = f"{self.state.current_song.time_played}s / {threshold}s"
 
-        if not self.current_song.playing:
-            self.update_song_info(self.format_song_info(self.current_song, PAUSED))
-            self.update_progress_bar(progress_value, f"{progress_text} ({PAUSED})")
-        elif self.current_song.scrobbled:
-            self.update_song_info(self.format_song_info(self.current_song, SCROBBLED))
-            self.update_progress_bar(1.0, f"{progress_text} (Scrobbled)")
+        if not self.state.current_song.playing:
+            self.update_song_info(
+                self.format_song_info(self.state.current_song, PAUSED)
+            )
+            self.update_progress_bar(
+                progress_value,
+                f"{progress_text} ({PAUSED})"
+            )
+        elif self.state.current_song.scrobbled:
+            self.update_song_info(
+                self.format_song_info(self.state.current_song, SCROBBLED)
+            )
+            self.update_progress_bar(
+                1.0,
+                f"{progress_text} (Scrobbled)"
+            )
         else:
-            self.current_song.time_played += 1
-            self.update_song_info(self.format_song_info(self.current_song))
+            self.state.current_song.time_played += 1
+            self.update_song_info(self.format_song_info(self.state.current_song))
             self.update_progress_bar(progress_value, progress_text)
 
-            if self.current_song.is_ready_to_be_scrobbled and not self.is_scrobbling:
-                self.is_scrobbling = True
-                scrobbled_track = await self.lastfm.scrobble(self.current_song)
+            if self.state.current_song.is_ready_to_be_scrobbled and not self.state.is_scrobbling:
+                self.state.is_scrobbling = True
+                scrobbled_track = await self.lastfm.scrobble(self.state.current_song)
                 if scrobbled_track:
                     self.session.add_scrobble(scrobbled_track)
-                    self.session.remove_pending(self.current_song)
-                    self.current_song.scrobbled = True
-                    self.update_song_info(self.format_song_info(self.current_song, SCROBBLED))
-                    self.update_progress_bar(1.0, f"{progress_text} (Scrobbled)")
+                    self.session.remove_pending(self.state.current_song)
+                    self.state.current_song.scrobbled = True
+                    self.update_song_info(
+                        self.format_song_info(self.state.current_song, SCROBBLED)
+                    )
+                    self.update_progress_bar(
+                        1.0,
+                        f"{progress_text} (Scrobbled)"
+                    )
                     self.update_session_info()
                 else:
-                    self.session.add_pending(self.current_song)
-                    self.update_song_info(self.format_song_info(self.current_song, PENDING))
-                self.is_scrobbling = False
+                    self.session.add_pending(self.state.current_song)
+                    self.update_song_info(
+                        self.format_song_info(self.state.current_song, PENDING)
+                    )
+                self.state.is_scrobbling = False
 
 
 if __name__ == "__main__":

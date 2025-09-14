@@ -19,7 +19,7 @@ LASTFM_PASSWORD_HASH = pylast.md5(config.LASTFM_PASSWORD)
 
 # https://www.last.fm/api/show/user.getInfo
 # Manual API call
-async def get_lastfm_account_details() -> LastFmUser:
+def get_lastfm_account_details() -> LastFmUser:
     params = {
         'method': 'user.getInfo',
         'user': LASTFM_USERNAME,

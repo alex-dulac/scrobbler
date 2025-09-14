@@ -1,4 +1,4 @@
-from enum import Enum, EnumType
+from enum import Enum
 
 
 class Integration(Enum):
@@ -16,7 +16,7 @@ class Integration(Enum):
         return names.get(self, self.name)
 
 
-class PlaybackAction(EnumType):
+class PlaybackAction(str, Enum):
     PAUSE = 'pause'
     NEXT = 'next'
     PREVIOUS = 'previous'

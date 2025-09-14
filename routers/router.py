@@ -5,9 +5,8 @@ from core import config
 from core.security import verify_token
 from library.comparison import Comparison
 from routers.spotify_router import spotify_router
-from routers.data_router import data_router
 from routers.scrobble_router import scrobble_router
-from routers.state import get_app_state
+from library.state import get_app_state
 from routers.sync_router import sync_router
 from routers.user_router import user_router
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
@@ -19,7 +18,6 @@ router = APIRouter(dependencies=[
     Depends(verify_token)
 ])
 
-router.include_router(data_router)
 router.include_router(scrobble_router)
 router.include_router(spotify_router)
 router.include_router(sync_router)
@@ -109,7 +107,7 @@ async def state():
     return {
         "current_song": app_state.current_song,
         "lastfm_album": app_state.lastfm_album,
-        "is_scrobbling": app_state.is_scrobbling,
-        "active_integration": app_state.active_integration,
-        "user": await get_lastfm_account_details()
+        "scrobble_enabled": app_state.scrobble_enabled,
+        "active_integration": app_state.active_integration.normalized_name(),
+        "user": get_lastfm_account_details(),
     }

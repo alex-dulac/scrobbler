@@ -12,10 +12,9 @@ class SessionScrobbles:
     Manages the collection of scrobbled tracks and pending scrobbles during a session.
     Provides methods for adding, retrieving, and analyzing scrobble data.
     """
-    def __init__(self, lastfm_service: LastFmService):
+    def __init__(self):
         self.scrobbles: List[LastFmTrack] = []
         self.pending: List[Track] = []
-        self.lastfm = lastfm_service
         self.count = 0
 
     def add_scrobble(self, track: LastFmTrack) -> None:
@@ -26,7 +25,7 @@ class SessionScrobbles:
     def add_pending(self, track: Track) -> None:
         if track not in self.pending:
             self.pending.append(track)
-            logger.info(f"Added track to pending scrobbles: {track.display_name()}")
+            logger.info(f"Added track to pending scrobbles: {track.display_name}")
 
     def remove_pending(self, track: Track) -> None:
         if track in self.pending:
@@ -46,11 +45,12 @@ class SessionScrobbles:
                 logger.info("No pending scrobbles.")
             return 0
 
+        lastfm_service = LastFmService()
         processed_count = 0
         pending_copy = self.pending.copy()
 
         for track in pending_copy:
-            scrobbled_track = await self.lastfm.scrobble(track)
+            scrobbled_track = await lastfm_service.scrobble(track)
             if scrobbled_track:
                 self.add_scrobble(scrobbled_track)
                 self.remove_pending(track)
@@ -81,7 +81,7 @@ class SessionScrobbles:
 
         # List all scrobbles
         for scrobble in self.scrobbles:
-            summary.append(f"  {scrobble.display_name()}")
+            summary.append(f"  {scrobble.display_name}")
 
         summary.append("")  # Empty line
 
