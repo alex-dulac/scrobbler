@@ -1,21 +1,21 @@
 from collections import Counter
 from typing import List, Dict
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from models.schemas import LastFmTrack, Track
 from services.lastfm_service import LastFmService
 from library.utils import internet
 
 
-class SessionScrobbles:
+class SessionScrobbles(BaseModel):
     """
     Manages the collection of scrobbled tracks and pending scrobbles during a session.
     Provides methods for adding, retrieving, and analyzing scrobble data.
     """
-    def __init__(self):
-        self.scrobbles: List[LastFmTrack] = []
-        self.pending: List[Track] = []
-        self.count = 0
+    scrobbles: List[LastFmTrack] = Field(default_factory=list)
+    pending: List[Track] = Field(default_factory=list)
+    count: int = 0
 
     def add_scrobble(self, track: LastFmTrack) -> None:
         self.scrobbles.append(track)

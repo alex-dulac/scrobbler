@@ -2,6 +2,7 @@ from loguru import logger
 from pydantic import HttpUrl, BaseModel
 
 from library.integrations import Integration
+from library.session_scrobbles import SessionScrobbles
 from models.schemas import Album, LastFmUser, Track
 from services.lastfm_service import get_lastfm_account_details
 
@@ -14,6 +15,7 @@ class AppState(BaseModel):
     current_song: Track | None = None
     lastfm_album: Album | None = None
     spotify_artist_image: HttpUrl | None = None
+    session: SessionScrobbles = SessionScrobbles()
 
     def __init__(self):
         super().__init__()
