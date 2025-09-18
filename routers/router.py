@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from loguru import logger
 
 from core import config
-from core.security import verify_token
+from core.security import token_auth
 from library.comparison import Comparison
 from routers.spotify_router import spotify_router
 from routers.scrobble_router import scrobble_router
@@ -10,12 +10,12 @@ from library.state import get_app_state
 from routers.sync_router import sync_router
 from routers.user_router import user_router
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
-from services.lastfm_service import get_lastfm_account_details, LastFmService
+from services.lastfm_service import LastFmService
 from services.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),
-    Depends(verify_token)
+    Depends(token_auth)
 ])
 
 router.include_router(scrobble_router)
@@ -109,5 +109,5 @@ async def state():
         "lastfm_album": app_state.lastfm_album,
         "scrobble_enabled": app_state.scrobble_enabled,
         "active_integration": app_state.active_integration.normalized_name(),
-        "user": get_lastfm_account_details(),
+        "user": app_state.user,
     }

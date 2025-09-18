@@ -1,49 +1,33 @@
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette import status
 
 from core import config
 
 
-class CustomHTTPBearer(HTTPBearer):
-    """
-   Custom HTTP Bearer authentication class.
+class TokenAuth(HTTPBearer):
+    def __init__(self, auto_error: bool = False):
+        super().__init__(auto_error=auto_error)
+        self.expected_token = config.APP_TOKEN
 
-   This class extends the HTTPBearer class to provide custom behavior for handling
-   HTTP Bearer authentication. It overrides the __call__ method to handle the
-   extraction and validation of the authorization credentials from the request.
-
-   Parameters:
-   request (Request): The incoming HTTP request.
-
-   Returns:
-   HTTPAuthorizationCredentials: The extracted authorization credentials if present.
-
-   Raises:
-   HTTPException: If no authorization credentials are provided, an HTTPException
-       is raised with a 401 status code and a message indicating the issue.
-   """
-    async def __call__(self, request: Request) -> HTTPAuthorizationCredentials:
-        try:
-            credentials: HTTPAuthorizationCredentials = await super().__call__(request)
-            return credentials
-        except HTTPException:
+    async def __call__(self, request: Request) -> str:
+        credentials: HTTPAuthorizationCredentials = await super().__call__(request)
+        if not credentials:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No authorization provided",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        token = credentials.credentials
+        if not token or token != self.expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-http_scheme = CustomHTTPBearer()
+        return token
 
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(http_scheme)):
-    token = credentials.credentials
-
-    if token != config.APP_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+token_auth = TokenAuth()

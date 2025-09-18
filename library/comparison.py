@@ -18,7 +18,11 @@ class Comparison(BaseModel):
 
     @property
     def is_same_song(self) -> bool:
-        return self.poll and self.current_song and self.poll.name == self.current_song.name and self.poll.artist == self.current_song.artist
+        if not self.poll or not self.current_song:
+            return False
+        same_title = self.poll.name == self.current_song.name
+        same_artist = self.poll.artist == self.current_song.artist
+        return same_title and same_artist
 
     @property
     def update_song_playing_status(self) -> bool:

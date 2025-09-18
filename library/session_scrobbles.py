@@ -60,37 +60,32 @@ class SessionScrobbles(BaseModel):
         return processed_count
 
     def get_artist_counts(self) -> Dict[str, int]:
-        """Return a dictionary of artist names and their scrobble counts."""
         return Counter(scrobble.artist for scrobble in self.scrobbles)
 
     def get_song_counts(self) -> Dict[str, int]:
-        """Return a dictionary of song names and their scrobble counts."""
         return Counter(scrobble.name for scrobble in self.scrobbles)
 
     def get_multiple_scrobbles(self) -> Dict[str, int]:
-        """Return songs that have been scrobbled more than once."""
         song_counts = self.get_song_counts()
         return {song: count for song, count in song_counts.items() if count > 1}
 
     def get_session_summary(self) -> str:
-        """Generate a formatted summary of the session's scrobbles."""
         if not self.scrobbles:
             return "No scrobbles during this session."
 
         summary = ["Scrobbles during this session:"]
 
-        # List all scrobbles
         for scrobble in self.scrobbles:
             summary.append(f"  {scrobble.display_name}")
 
-        summary.append("")  # Empty line
+        summary.append("")
 
         # Artist counts
         summary.append("Artist scrobble counts:")
         for artist, count in self.get_artist_counts().items():
             summary.append(f"  {artist}: {count}")
 
-        summary.append("")  # Empty line
+        summary.append("")
 
         # Multiple scrobbles
         multiple = self.get_multiple_scrobbles()
