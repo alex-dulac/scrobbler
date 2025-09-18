@@ -57,6 +57,7 @@ class ScrobblerApp(App):
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
         yield widgets.HistoryListWidget(id=widgets.TuiViews.HISTORY_LIST)
         yield widgets.HistoryChartWidget(id=widgets.TuiViews.HISTORY_CHART)
+        yield widgets.ArtistStatsWidget(id=widgets.TuiViews.ARTIST_STATS)
         yield widgets.SessionInfoWidget(self.state.session, id=widgets.TuiViews.SESSION)
         yield Footer()
 
@@ -65,6 +66,9 @@ class ScrobblerApp(App):
 
     def get_history_chart(self) -> widgets.HistoryChartWidget:
         return self.query_one(widgets.HistoryChartWidget)
+
+    def get_artist_stats(self) -> widgets.ArtistStatsWidget:
+        return self.query_one(widgets.ArtistStatsWidget)
 
     def get_session_info(self) -> widgets.SessionInfoWidget:
         return self.query_one(widgets.SessionInfoWidget)
@@ -79,6 +83,7 @@ class ScrobblerApp(App):
         try:
             await session_manager.init_db()
             self.db_connected = True
+            self.get_artist_stats().db_connected = True
             self.notify("Database connected successfully.")
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
@@ -88,24 +93,34 @@ class ScrobblerApp(App):
         self.update_song_info(WAITING)
         self.update_progress_bar(0, WAITING)
         self.get_history_list().update(WAITING)
+        self.get_artist_stats().update(WAITING)
         self.update_view_visibility()
 
     def update_view_visibility(self) -> None:
         history_list = self.get_history_list()
         history_chart = self.get_history_chart()
+        artist_stats = self.get_artist_stats()
         session = self.get_session_info()
 
         match self.current_view:
             case widgets.TuiViews.HISTORY_LIST:
                 history_list.display = True
+                artist_stats.display = False
                 history_chart.display = False
                 session.display = False
             case widgets.TuiViews.HISTORY_CHART:
                 history_list.display = False
+                artist_stats.display = False
                 history_chart.display = True
+                session.display = False
+            case widgets.TuiViews.ARTIST_STATS:
+                history_list.display = False
+                artist_stats.display = True
+                history_chart.display = False
                 session.display = False
             case widgets.TuiViews.SESSION:
                 history_list.display = False
+                artist_stats.display = False
                 history_chart.display = False
                 session.display = True
 
@@ -115,7 +130,7 @@ class ScrobblerApp(App):
         self.notify("Thank you for scrobbling. Goodbye!")
 
         if self.state.session.pending:
-            count = await self.state.session.process_pending_scrobbles()
+            count = await self.state.session.process_pending_scrobbles(self.lastfm)
             self.notify(f"Processed {count} pending scrobbles.")
 
         if self.db_connected:
@@ -144,6 +159,9 @@ class ScrobblerApp(App):
             self.update_view_visibility()
         elif event.button.id == "show-history-chart":
             self.current_view = widgets.TuiViews.HISTORY_CHART
+            self.update_view_visibility()
+        elif event.button.id == "show-artist-stats":
+            self.current_view = widgets.TuiViews.ARTIST_STATS
             self.update_view_visibility()
         elif event.button.id == "show-session":
             self.current_view = widgets.TuiViews.SESSION
@@ -174,6 +192,8 @@ class ScrobblerApp(App):
             self.state.current_song = None
             self.update_song_info(NOT_PLAYING)
             self.get_history_list().update(NOT_PLAYING)
+            self.get_history_chart().update(NOT_PLAYING)
+            self.get_artist_stats().update(NOT_PLAYING)
             self.update_progress_bar(0, NOT_PLAYING)
             return
 
@@ -183,6 +203,7 @@ class ScrobblerApp(App):
             scrobbles = await self.lastfm.current_track_user_scrobbles(self.state.current_song)
             self.get_history_list().update_list(self.state.current_song, scrobbles)
             self.get_history_chart().update_chart(self.state.current_song, scrobbles)
+            await self.get_artist_stats().update_artist_stats(self.state.current_song)
             if compare.update_lastfm_now_playing:
                 self.state.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.state.current_song)
 

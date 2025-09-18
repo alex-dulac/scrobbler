@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db import (
@@ -194,6 +194,36 @@ class ScrobbleRepository:
             .where(Track.title.is_(None))
             .distinct()
             .order_by(Scrobble.track_name)
+        )
+        result = await self.db.execute(query)
+        return result.all()
+
+
+    async def get_top_tracks_by_artist(self, artist_name: str, limit: int = None) -> Any:
+        query = (
+            select(
+                Scrobble.track_name,
+                Scrobble.album_name,
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(Scrobble.artist_name == artist_name)
+            .group_by(Scrobble.track_name, Scrobble.album_name)
+            .order_by(desc('play_count'))
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        return result.all()
+
+    async def get_top_albums_by_artist(self, artist_name: str, limit: int = None) -> Any:
+        query = (
+            select(
+                Scrobble.album_name,
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(Scrobble.artist_name == artist_name)
+            .group_by(Scrobble.album_name)
+            .order_by(desc('play_count'))
+            .limit(limit)
         )
         result = await self.db.execute(query)
         return result.all()

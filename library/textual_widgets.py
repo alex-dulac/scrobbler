@@ -5,12 +5,14 @@ from enum import Enum
 from rich.console import RenderableType, Group
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
-from textual.containers import ScrollableContainer, Container
+from textual.containers import Container
 from textual.widgets import Static, Button
 
 from core import config
+from core.database import get_async_session
 from library.session_scrobbles import SessionScrobbles
 from models.schemas import Track, LastFmTrack
+from repositories.repository import ScrobbleRepository
 
 css = """
     Button {
@@ -46,6 +48,7 @@ css = """
 class TuiViews(str, Enum):
     HISTORY_LIST = "history-list"
     HISTORY_CHART = "history-chart"
+    ARTIST_STATS = "artist-stats"
     SESSION = "session-info"
 
 
@@ -64,6 +67,7 @@ playback_controls = Container(
 view_controls = Container(
     Button("History List", id="show-history-list"),
     Button("History Chart", id="show-history-chart"),
+    Button("Artist Stats", id="show-artist-stats"),
     Button("Session", id="show-session"),
     classes="controls",
     id="view-controls"
@@ -94,24 +98,9 @@ class ScrobbleProgressBar(Static):
         self.update(self.progress_bar)
 
 
-class HistoryContent(Static):
-    def __init__(self, id=None):
-        super().__init__(id=id)
-        self.update("No song selected")
-
-
-class HistoryListWidget(ScrollableContainer):
+class HistoryListWidget(Static):
     def __init__(self, id=None):
         super().__init__(id=id, classes="content-container")
-        self.content = HistoryContent(id=TuiViews.HISTORY_LIST)
-
-    def on_mount(self) -> None:
-        self.mount(self.content)
-        self.content.update("No song selected")
-
-    def update(self, renderable):
-        if hasattr(self, "content") and self.content.is_mounted:
-            self.content.update(renderable)
 
     def update_list(self, current_song: Track, scrobbles: list[LastFmTrack]):
         if not current_song:
@@ -147,25 +136,16 @@ class HistoryListWidget(ScrollableContainer):
         self.update(table)
 
 
-class HistoryChartWidget(ScrollableContainer):
+class HistoryChartWidget(Static):
     def __init__(self, id=None):
         super().__init__(id=id, classes="content-container")
-        self.content = HistoryContent(id=TuiViews.HISTORY_CHART)
         self.start_year: int = datetime.today().year
         self.current_year: int = datetime.today().year
         self.all_years = range(self.start_year, self.current_year + 1)
 
-    def on_mount(self) -> None:
-        self.mount(self.content)
-        self.content.update("No song selected")
-
     def set_years(self, start_year: int):
         self.start_year = start_year
         self.all_years = range(self.start_year, self.current_year + 1)
-
-    def update(self, renderable):
-        if hasattr(self, "content") and self.content.is_mounted:
-            self.content.update(renderable)
 
     def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack]) -> None:
         if not current_song:
@@ -176,7 +156,7 @@ class HistoryChartWidget(ScrollableContainer):
             self.update("Failed to load scrobble history")
             return
 
-        if not scrobbles:
+        if len(scrobbles) == 0:
             self.update(f"No previous scrobbles found for: {current_song.display_name}")
             return
 
@@ -219,6 +199,65 @@ class HistoryChartWidget(ScrollableContainer):
 
         combined_display = Group(chart_table, "", summary_table)
         self.update(combined_display)
+
+
+class ArtistStatsWidget(Static):
+    def __init__(self, id=None, db_connected: bool = False):
+        super().__init__(id=id, classes="content-container")
+        self.db_connected = db_connected
+        if not self.db_connected:
+            self.update("Database not connected")
+        else:
+            self.update("No song selected")
+
+    async def update_artist_stats(self, artist_name: Track) -> None:
+        if not self.db_connected:
+            self.update("Database not connected")
+            return
+
+        if not artist_name:
+            self.update("No song selected")
+            return
+
+        db = await get_async_session()
+        repo = ScrobbleRepository(db=db)
+
+        top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
+
+        if not top_played_tracks:
+            self.update(f"No scrobbles found for artist: {artist_name.artist}")
+            return
+
+        tracks = Table(title=f"Top Played Tracks for: {artist_name.artist}", expand=True)
+        tracks.add_column("#", style="dim", width=4)
+        tracks.add_column("Track", style="white", width=40)
+        tracks.add_column("Album", style="white", width=40)
+        tracks.add_column("Play Count", style="cyan", width=12)
+
+        album_styles = {}
+        available_styles = [
+            "bold magenta", "bold green", "bold blue", "bold yellow", "bold cyan",
+            "bold red", "magenta", "green", "blue", "yellow", "cyan", "red"
+        ]
+
+        for i, (track_name, album_name, play_count) in enumerate(top_played_tracks):
+            if album_name not in album_styles:
+                album_styles[album_name] = available_styles[len(album_styles) % len(available_styles)]
+            row_style = album_styles[album_name]
+            tracks.add_row(str(i + 1), track_name, album_name, str(play_count), style=row_style)
+
+        top_played_albums = await repo.get_top_albums_by_artist(artist_name.artist)
+
+        albums = Table(title=f"Top Played Albums for: {artist_name.artist}", expand=True)
+        albums.add_column("#", style="dim", width=4)
+        albums.add_column("Album", style="white", width=60)
+        albums.add_column("Play Count", style="cyan", width=12)
+
+        for i, (album_name, play_count) in enumerate(top_played_albums):
+            row_style = album_styles.get(album_name, "white")
+            albums.add_row(str(i + 1), album_name, str(play_count), style=row_style)
+
+        self.update(Group(tracks, "", albums))
 
 
 class SessionInfoWidget(Static):

@@ -131,7 +131,7 @@ async def stop() -> None:
     global loop
     new_line()
 
-    await session.process_pending_scrobbles()
+    await session.process_pending_scrobbles(lastfm_service=lastfm)
     new_line()
 
     print(session.get_session_summary())

@@ -31,7 +31,7 @@ class SessionScrobbles(BaseModel):
         if track in self.pending:
             self.pending.remove(track)
 
-    async def process_pending_scrobbles(self) -> int:
+    async def process_pending_scrobbles(self, lastfm_service: LastFmService) -> int:
         """
         Process all pending scrobbles if internet is available.
         Returns the number of successfully processed scrobbles.
@@ -45,7 +45,6 @@ class SessionScrobbles(BaseModel):
                 logger.info("No pending scrobbles.")
             return 0
 
-        lastfm_service = LastFmService()
         processed_count = 0
         pending_copy = self.pending.copy()
 
