@@ -17,11 +17,7 @@ from services.lastfm_service import LastFmService
 import library.textual_widgets as widgets
 
 
-SCROBBLED = "✓ Scrobbled to Last.fm"
-PAUSED = "Paused"
-PENDING = "⏱ Pending scrobble (no internet)"
 WAITING  = "Waiting for music..."
-NOT_PLAYING = "No song playing"
 
 
 def format_song_info(song: Track, status="") -> Text:
@@ -31,7 +27,7 @@ def format_song_info(song: Track, status="") -> Text:
     text.append(f"{song.artist}", style="italic cyan")
     if song.album:
         text.append(f" • ", style="dim")
-        text.append(f"{song.album}", style="italic green")
+        text.append(f"{song.clean_album}", style="italic green")
     if status:
         text.append(f"\n{status}", style="yellow" if "Scrobbled" in status else "blue")
     return text
@@ -46,7 +42,7 @@ class ScrobblerApp(App):
         self.lastfm: LastFmService = LastFmService()
         self.spotify: SpotifyService = SpotifyService()
         self.poll_service = poll_apple_music
-        self.current_view = widgets.TuiViews.HISTORY_CHART
+        self.current_view = widgets.TuiViews.TRACK_HISTORY
         self.db_connected: bool = False
 
     def compose(self) -> ComposeResult:
@@ -55,17 +51,13 @@ class ScrobblerApp(App):
         yield widgets.view_controls
         yield widgets.SongInfoWidget(id="song-info")
         yield widgets.ScrobbleProgressBar(id="scrobble-progress")
-        yield widgets.HistoryListWidget(id=widgets.TuiViews.HISTORY_LIST)
-        yield widgets.HistoryChartWidget(id=widgets.TuiViews.HISTORY_CHART)
+        yield widgets.TrackHistoryWidget(id=widgets.TuiViews.TRACK_HISTORY)
         yield widgets.ArtistStatsWidget(id=widgets.TuiViews.ARTIST_STATS)
         yield widgets.SessionInfoWidget(self.state.session, id=widgets.TuiViews.SESSION)
         yield Footer()
 
-    def get_history_list(self) -> widgets.HistoryListWidget:
-        return self.query_one(widgets.HistoryListWidget)
-
-    def get_history_chart(self) -> widgets.HistoryChartWidget:
-        return self.query_one(widgets.HistoryChartWidget)
+    def get_track_history(self) -> widgets.TrackHistoryWidget:
+        return self.query_one(widgets.TrackHistoryWidget)
 
     def get_artist_stats(self) -> widgets.ArtistStatsWidget:
         return self.query_one(widgets.ArtistStatsWidget)
@@ -73,8 +65,14 @@ class ScrobblerApp(App):
     def get_session_info(self) -> widgets.SessionInfoWidget:
         return self.query_one(widgets.SessionInfoWidget)
 
-    def update_progress_bar(self, progress_value: float, progress_text: str) -> None:
-        self.query_one(widgets.ScrobbleProgressBar).update_progress(progress_value, progress_text)
+    def update_progress_bar(self) -> None:
+        value = 0.0
+        text = WAITING
+        if self.state.current_song:
+            value = self.state.current_song.scrobble_progress_value
+            text = self.state.current_song.scrobble_progress_text
+
+        self.query_one(widgets.ScrobbleProgressBar).update_progress(value, text)
 
     def update_song_info(self, info: VisualType) -> None:
         self.query_one(widgets.SongInfoWidget).update(info)
@@ -88,38 +86,28 @@ class ScrobblerApp(App):
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
 
-        self.get_history_chart().set_years(self.state.user.registered.year)
+        self.get_track_history().set_years(self.state.user.registered.year)
         self.set_interval(1, self.update_display)
         self.update_song_info(WAITING)
-        self.update_progress_bar(0, WAITING)
-        self.get_history_list().update(WAITING)
+        self.update_progress_bar()
         self.get_artist_stats().update(WAITING)
         self.update_view_visibility()
 
     def update_view_visibility(self) -> None:
-        history_list = self.get_history_list()
-        history_chart = self.get_history_chart()
+        history_chart = self.get_track_history()
         artist_stats = self.get_artist_stats()
         session = self.get_session_info()
 
         match self.current_view:
-            case widgets.TuiViews.HISTORY_LIST:
-                history_list.display = True
-                artist_stats.display = False
-                history_chart.display = False
-                session.display = False
-            case widgets.TuiViews.HISTORY_CHART:
-                history_list.display = False
+            case widgets.TuiViews.TRACK_HISTORY:
                 artist_stats.display = False
                 history_chart.display = True
                 session.display = False
             case widgets.TuiViews.ARTIST_STATS:
-                history_list.display = False
                 artist_stats.display = True
                 history_chart.display = False
                 session.display = False
             case widgets.TuiViews.SESSION:
-                history_list.display = False
                 artist_stats.display = False
                 history_chart.display = False
                 session.display = True
@@ -154,11 +142,8 @@ class ScrobblerApp(App):
         elif event.button.id == "quit":
             self.action_quit()
         # views
-        elif event.button.id == "show-history-list":
-            self.current_view = widgets.TuiViews.HISTORY_LIST
-            self.update_view_visibility()
-        elif event.button.id == "show-history-chart":
-            self.current_view = widgets.TuiViews.HISTORY_CHART
+        elif event.button.id == "show-track-history":
+            self.current_view = widgets.TuiViews.TRACK_HISTORY
             self.update_view_visibility()
         elif event.button.id == "show-artist-stats":
             self.current_view = widgets.TuiViews.ARTIST_STATS
@@ -183,6 +168,19 @@ class ScrobblerApp(App):
             if result is False:
                 self.notify("Failed to control playback. Spotify Premium required.")
 
+    async def handle_scrobble(self):
+        self.state.is_scrobbling = True
+        scrobbled_track = await self.lastfm.scrobble(self.state.current_song)
+        if scrobbled_track:
+            self.state.session.add_scrobble(scrobbled_track)
+            self.state.session.remove_pending(self.state.current_song)
+            self.state.current_song.scrobbled = True
+            self.get_session_info().update_session_info()
+        else:
+            self.state.session.add_pending(self.state.current_song)
+            self.update_song_info(format_song_info(self.state.current_song, "⏱ Pending scrobble (no internet)"))
+        self.state.is_scrobbling = False
+
     @work
     async def update_display(self) -> None:
         poll: Track = await self.poll_service()
@@ -190,19 +188,17 @@ class ScrobblerApp(App):
 
         if compare.no_song_playing:
             self.state.current_song = None
-            self.update_song_info(NOT_PLAYING)
-            self.get_history_list().update(NOT_PLAYING)
-            self.get_history_chart().update(NOT_PLAYING)
-            self.get_artist_stats().update(NOT_PLAYING)
-            self.update_progress_bar(0, NOT_PLAYING)
+            self.update_song_info(WAITING)
+            self.get_track_history().update(WAITING)
+            self.get_artist_stats().update(WAITING)
+            self.update_progress_bar()
             return
 
         if compare.song_has_changed:
             self.state.current_song = poll
             self.state.current_song.time_played = 0
             scrobbles = await self.lastfm.current_track_user_scrobbles(self.state.current_song)
-            self.get_history_list().update_list(self.state.current_song, scrobbles)
-            self.get_history_chart().update_chart(self.state.current_song, scrobbles)
+            self.get_track_history().update_chart(self.state.current_song, scrobbles)
             await self.get_artist_stats().update_artist_stats(self.state.current_song)
             if compare.update_lastfm_now_playing:
                 self.state.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.state.current_song)
@@ -210,32 +206,18 @@ class ScrobblerApp(App):
         if compare.update_song_playing_status:
             self.state.current_song.playing = poll.playing
 
-        threshold = self.state.current_song.scrobble_threshold
-        progress_value = min(1.0, self.state.current_song.time_played / threshold)
-        progress_text = f"{self.state.current_song.time_played}s / {threshold}s"
-
-        if not self.state.current_song.playing:
-            self.update_song_info(format_song_info(self.state.current_song, PAUSED))
-            self.update_progress_bar(progress_value, f"{progress_text} ({PAUSED})")
-        elif self.state.current_song.scrobbled:
-            self.update_song_info(format_song_info(self.state.current_song, SCROBBLED))
-            self.update_progress_bar(1.0, f"{progress_text} (Scrobbled)")
+        if self.state.current_song.scrobbled:
+            self.update_song_info(format_song_info(self.state.current_song, "✓ Scrobbled to Last.fm"))
+            self.update_progress_bar()
+        elif not self.state.current_song.playing:
+            self.update_song_info(format_song_info(self.state.current_song, "Paused"))
+            self.update_progress_bar()
         else:
             self.state.current_song.time_played += 1
             self.update_song_info(format_song_info(self.state.current_song))
-            self.update_progress_bar(progress_value, progress_text)
+            self.update_progress_bar()
             if self.state.current_song.is_ready_to_be_scrobbled and not self.state.is_scrobbling:
-                self.state.is_scrobbling = True
-                scrobbled_track = await self.lastfm.scrobble(self.state.current_song)
-                if scrobbled_track:
-                    self.state.session.add_scrobble(scrobbled_track)
-                    self.state.session.remove_pending(self.state.current_song)
-                    self.state.current_song.scrobbled = True
-                    self.get_session_info().update_session_info()
-                else:
-                    self.state.session.add_pending(self.state.current_song)
-                    self.update_song_info(format_song_info(self.state.current_song, PENDING))
-                self.state.is_scrobbling = False
+                await self.handle_scrobble()
 
 
 if __name__ == "__main__":

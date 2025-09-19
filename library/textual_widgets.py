@@ -46,8 +46,7 @@ css = """
 
 
 class TuiViews(str, Enum):
-    HISTORY_LIST = "history-list"
-    HISTORY_CHART = "history-chart"
+    TRACK_HISTORY = "track-history"
     ARTIST_STATS = "artist-stats"
     SESSION = "session-info"
 
@@ -65,8 +64,7 @@ playback_controls = Container(
 
 
 view_controls = Container(
-    Button("History List", id="show-history-list"),
-    Button("History Chart", id="show-history-chart"),
+    Button("Track History", id="show-track-history"),
     Button("Artist Stats", id="show-artist-stats"),
     Button("Session", id="show-session"),
     classes="controls",
@@ -98,45 +96,7 @@ class ScrobbleProgressBar(Static):
         self.update(self.progress_bar)
 
 
-class HistoryListWidget(Static):
-    def __init__(self, id=None):
-        super().__init__(id=id, classes="content-container")
-
-    def update_list(self, current_song: Track, scrobbles: list[LastFmTrack]):
-        if not current_song:
-            self.update("No song selected")
-            return
-
-        if scrobbles is False:
-            self.update("Failed to load scrobble history")
-            return
-
-        if not scrobbles:
-            self.update(f"No previous scrobbles found for: {current_song.display_name}")
-            return
-
-        table = Table(title=f"Scrobble History for: {current_song.display_name}", expand=True)
-        table.add_column("#", style="dim", width=4)
-        table.add_column("Timestamp", style="cyan")
-
-        for i, scrobble in enumerate(scrobbles):
-            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
-            timestamp = dt.strftime(config.DATETIME_FORMAT)
-            table.add_row(
-                str(i + 1),
-                timestamp
-            )
-
-        table.add_section()
-        table.add_row(
-            "Total",
-            f"{len(scrobbles)} scrobbles"
-        )
-
-        self.update(table)
-
-
-class HistoryChartWidget(Static):
+class TrackHistoryWidget(Static):
     def __init__(self, id=None):
         super().__init__(id=id, classes="content-container")
         self.start_year: int = datetime.today().year
@@ -197,7 +157,25 @@ class HistoryChartWidget(Static):
         summary_table.add_row("Average per Year", f"{avg_per_year:.1f}")
         summary_table.add_row("Peak Year", f"{max(year_counts, key=year_counts.get)} ({max(year_counts.values())} scrobbles)")
 
-        combined_display = Group(chart_table, "", summary_table)
+        history_table = Table(title=f"Scrobble History for: {current_song.display_name}", expand=True)
+        history_table.add_column("#", style="dim", width=4)
+        history_table.add_column("Timestamp", style="cyan")
+
+        for i, scrobble in enumerate(scrobbles):
+            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
+            timestamp = dt.strftime(config.DATETIME_FORMAT)
+            history_table.add_row(
+                str(i + 1),
+                timestamp
+            )
+
+        history_table.add_section()
+        history_table.add_row(
+            "Total",
+            f"{len(scrobbles)} scrobbles"
+        )
+
+        combined_display = Group(chart_table, "", summary_table, "", history_table)
         self.update(combined_display)
 
 

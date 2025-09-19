@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, field_validator, HttpUrl
+from pydantic import BaseModel, HttpUrl
 
 
 class Artist(BaseModel):
@@ -29,7 +29,7 @@ class Track(BaseModel):
     album: Optional[str] = None
     playing: bool = False
     time_played: int = 0
-    duration: int = 0
+    duration: float = 0
     scrobbled: bool = False
     lastfm_updated_now_playing: bool = False
     clean_name: Optional[str] = None
@@ -38,22 +38,6 @@ class Track(BaseModel):
     class Config:
         extra = "allow"
         from_attributes = True
-
-    @field_validator("time_played", "duration", mode="before")
-    def _coerce_non_negative_int(cls, v):
-        try:
-            n = int(v or 0)
-        except (TypeError, ValueError):
-            n = 0
-        return max(n, 0)
-
-    @field_validator("clean_name", mode="after")
-    def _default_clean_name(cls, v, info):
-        return v if v is not None else info.data.get("name")
-
-    @field_validator("clean_album", mode="after")
-    def _default_clean_album(cls, v, info):
-        return v if v is not None else info.data.get("album")
 
     @property
     def has_clean_name(self) -> bool:
@@ -68,11 +52,25 @@ class Track(BaseModel):
         return min(round(self.duration / 2), 120) if self.duration else 120
 
     @property
+    def scrobble_progress_value(self) -> float:
+        return min(1.0, self.time_played / self.scrobble_threshold)
+
+    @property
+    def scrobble_progress_text(self) -> str:
+        base = f"{self.time_played}s / {self.scrobble_threshold}s"
+        if self.scrobbled:
+            return f"{base} (Scrobbled)"
+        elif not self.playing:
+            return f"{base} (Paused)"
+        else:
+            return base
+
+    @property
     def is_ready_to_be_scrobbled(self) -> bool:
         return self.playing and not self.scrobbled and self.time_played >= self.scrobble_threshold
 
     @property
-    def time_remaining(self) -> int:
+    def time_remaining(self) -> float:
         return max(self.duration - self.time_played, 0)
 
 
@@ -125,6 +123,7 @@ class AppleMusicTrack(Track):
 
         mapped["playing"] = playing
         return cls(**mapped)
+
 
 class LastFmTrack(Track):
     scrobbled_at: Optional[str] = None
