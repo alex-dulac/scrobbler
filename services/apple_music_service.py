@@ -1,3 +1,4 @@
+import asyncio
 import base64
 
 from applescript import AppleScript, AEType, kae, ScriptError
@@ -37,7 +38,10 @@ async def poll_apple_music() -> AppleMusicTrack | None:
     end tell
     """
     try:
-        result = AppleScript(script).run()
+        result = await asyncio.wait_for(
+            asyncio.to_thread(AppleScript(script).run),
+            timeout=3  # seconds
+        )
         track = result[0]
         playing = result[1]
 
@@ -52,6 +56,9 @@ async def poll_apple_music() -> AppleMusicTrack | None:
             return apple_music_track
         else:
             return None
+    except asyncio.TimeoutError:
+        logger.error("AppleScript execution timed out.")
+        return None
     except ScriptError as e:
         await handle_applescript_error(e)
         return None
