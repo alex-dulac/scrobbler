@@ -10,8 +10,8 @@ from library.state import get_app_state
 from routers.sync_router import sync_router
 from routers.user_router import user_router
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
-from services.lastfm_service import LastFmService
-from services.spotify_service import SpotifyService
+from services.lastfm_service import get_lastfm_service, LastFmService
+from services.spotify_service import get_spotify_service, SpotifyService
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),
@@ -23,12 +23,12 @@ router.include_router(spotify_router)
 router.include_router(sync_router)
 router.include_router(user_router)
 
-lasfm = LastFmService()
-spotify = SpotifyService()
-
 
 @router.get("/poll-song/")
-async def get_current_song():
+async def get_current_song(
+        lastfm: LastFmService = Depends(get_lastfm_service),
+        spotify: SpotifyService = Depends(get_spotify_service),
+):
     app_state = await get_app_state()
     active_integration = app_state.active_integration
     poll = None
@@ -68,11 +68,11 @@ async def get_current_song():
             app_state.spotify_artist_image = spotify_artist.image_url if spotify_artist else None
 
     if compare.update_lastfm_now_playing:
-        app_state.current_song.lastfm_updated_now_playing = await lasfm.update_now_playing(app_state.current_song)
+        app_state.current_song.lastfm_updated_now_playing = await lastfm.update_now_playing(app_state.current_song)
         logger.info(f"Updated Last.fm now playing status for '{app_state.current_song.name}'")
 
     if compare.update_lastfm_album:
-        app_state.lastfm_album = await lasfm.get_album(app_state.current_song.album, app_state.current_song.artist)
+        app_state.lastfm_album = await lastfm.get_album(app_state.current_song.album, app_state.current_song.artist)
         logger.info(f"Updated Last.fm album info: {app_state.lastfm_album.title if app_state.lastfm_album else 'None'}")
 
     data = {

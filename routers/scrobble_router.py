@@ -1,11 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from loguru import logger
 
 from library.state import get_app_state
-from services.lastfm_service import LastFmService
+from services.lastfm_service import get_lastfm_service, LastFmService
 
 scrobble_router = APIRouter()
-lastfm = LastFmService()
 
 
 @scrobble_router.get("/scrobble/status/")
@@ -23,7 +22,7 @@ async def scrobble_toggle():
 
 
 @scrobble_router.post("/scrobble/")
-async def scrobble_song():
+async def scrobble_song(lastfm: LastFmService = Depends(get_lastfm_service)):
     app_state = await get_app_state()
     result = None
 

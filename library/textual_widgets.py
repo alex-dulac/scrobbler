@@ -113,10 +113,6 @@ class TrackHistoryWidget(Static):
             return
 
         if not scrobbles:
-            self.update("Failed to load scrobble history")
-            return
-
-        if len(scrobbles) == 0:
             self.update(f"No previous scrobbles found for: {current_song.display_name}")
             return
 

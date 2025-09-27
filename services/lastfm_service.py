@@ -65,7 +65,7 @@ class LastFmService:
             username=LASTFM_USERNAME,
             password_hash=LASTFM_PASSWORD_HASH
         )
-        self.user = self.network.get_user(LASTFM_USERNAME)
+        self.user: pylast.User = self.network.get_user(LASTFM_USERNAME)
 
     async def get_user_playcount(self) -> str:
         playcount = self.user.get_playcount()
@@ -302,3 +302,9 @@ class LastFmService:
         }
 
         return daily_counts
+
+
+lastfm = LastFmService()
+
+async def get_lastfm_service() -> LastFmService:
+    return lastfm

@@ -71,7 +71,6 @@ class ScrobblerApp(App):
         if self.state.current_song:
             value = self.state.current_song.scrobble_progress_value
             text = self.state.current_song.scrobble_progress_text
-
         self.query_one(widgets.ScrobbleProgressBar).update_progress(value, text)
 
     def update_song_info(self, info: VisualType) -> None:
@@ -202,6 +201,7 @@ class ScrobblerApp(App):
             await self.get_artist_stats().update_artist_stats(self.state.current_song)
             if compare.update_lastfm_now_playing:
                 self.state.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.state.current_song)
+            return
 
         if compare.update_song_playing_status:
             self.state.current_song.playing = poll.playing
