@@ -7,8 +7,8 @@ import requests
 from loguru import logger
 
 from core import config
-from library.utils import clean_up_title
-from models.schemas import LastFmUser, LastFmTrack, TopItem, Artist, Album, Track
+from library.utils import clean_up_title, lastfm_friendly
+from models.schemas import LastFmUser, LastFmTrack, TopItem, Artist, Album, Track, SimilarTrack
 
 LASTFM_API_URL = config.LASTFM_API_URL
 LASTFM_API_KEY = config.LASTFM_API_KEY
@@ -66,6 +66,7 @@ class LastFmService:
             password_hash=LASTFM_PASSWORD_HASH
         )
         self.user: pylast.User = self.network.get_user(LASTFM_USERNAME)
+        logger.info(f"User {LASTFM_USERNAME} successfully authenticated")
 
     async def get_user_playcount(self) -> str:
         playcount = self.user.get_playcount()
@@ -133,7 +134,7 @@ class LastFmService:
             model = Album(
                 title=details.title,
                 artist_name=details.artist.name,
-                image_url=details.get_cover_image(size=pylast.SIZE_LARGE),
+                cover_image=details.get_cover_image(size=pylast.SIZE_LARGE),
                 url=details.get_url()
             )
             top_item = TopItem(
@@ -178,7 +179,7 @@ class LastFmService:
                 artist=artist,
                 album=album,
                 clean_album=album,
-                scrobbled_at=datetime.fromtimestamp(timestamp).strftime(config.DATETIME_FORMAT)
+                scrobbled_at=datetime.fromtimestamp(int(timestamp)),
             )
         except pylast.PyLastError as e:
             logger.error(f"Failed to scrobble to Last.fm: {e}")
@@ -215,20 +216,102 @@ class LastFmService:
 
         return image_url
 
-    async def get_album(self, title: str, artist: str) -> Album | None:
-        album = self.network.get_album(title=title, artist=artist)
+    async def get_album(
+            self,
+            title: str,
+            artist: str,
+            with_tracks: bool = False,
+            with_tags: bool = False
+    ) -> Album | None:
+        album = self.network.get_album(
+            title=lastfm_friendly(title),
+            artist=lastfm_friendly(artist)
+        )
+
+        try:
+            album_title = album.get_title(True)
+        except pylast.WSError as e:
+            logger.error(f"Failed to get album: {title} by {artist}: {e}")
+            return None
 
         image_url = await self.get_album_image_url(album)
+        artist_name = album.get_artist().get_name(True)
 
-        if album:
-            return Album(
-                title=album.title,
-                artist_name=album.artist.name,
-                image_url=image_url,
-                url=album.get_url()
-            )
-        else:
+        tracks = None
+        if with_tracks:
+            tracks = []
+            for order, t in enumerate(album.get_tracks(), start=1):
+                tracks.append({
+                    "track_name": t.title,
+                    "order": order,
+                })
+
+        tags = None
+        if with_tags:
+            tags = []
+            for tag in album.get_top_tags():
+                tags.append({
+                    "tag_name": tag.item.name,
+                    "weight": int(tag.weight)
+                })
+
+        return Album(
+            title=album_title,
+            artist_name=artist_name,
+            cover_image=image_url,
+            url=album.get_url(),
+            tracks=tracks,
+            tags=tags,
+            mbid=album.get_mbid(),
+            playcount=int(album.get_playcount()),
+            user_playcount=int(album.get_userplaycount()),
+            listener_count=int(album.get_listener_count()),
+            wiki=album.get_wiki_summary(),
+        )
+
+    async def get_track(
+            self,
+            track_name: str,
+            artist_name: str,
+            with_similar: bool = False,
+    ) -> LastFmTrack | None:
+        track = self.network.get_track(
+            artist=lastfm_friendly(artist_name),
+            title=lastfm_friendly(track_name)
+        )
+
+        try:
+            title = track.get_title(True)
+        except pylast.WSError as e:
+            logger.error(f"Failed to get track: {track_name} by {artist_name}: {e}")
             return None
+
+        similar_tracks = None
+        if with_similar:
+            similar_tracks = []
+            for s in track.get_similar(limit=20):
+                s_track = s.item
+                st = SimilarTrack(
+                    track_name=title,
+                    artist_name=artist_name,
+                    similar_track_name=s_track.title,
+                    similar_track_artist_name=s_track.artist.name,
+                    match=s.match
+                )
+                similar_tracks.append(st)
+
+        return LastFmTrack(
+            name=title,
+            artist=track.get_artist().get_name(True),
+            album=track.get_album().get_title(True) if track.get_album() else None,
+            duration=int(track.get_duration()) if track.get_duration() else None,
+            url=track.get_url(),
+            mbid=track.get_mbid(),
+            listener_playcount=int(track.get_playcount()),
+            user_playcount=int(track.get_userplaycount()),
+            listener_count=int(track.get_listener_count()),
+            similar_tracks=similar_tracks,
+        )
 
     async def current_track_user_scrobbles(self, current_song: Track) -> bool | list[LastFmTrack]:
         try:

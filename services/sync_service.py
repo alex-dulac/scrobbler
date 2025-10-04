@@ -1,9 +1,8 @@
 import asyncio
 from datetime import datetime
 
-from pylast import WSError
 from loguru import logger
-from pylast import TopItem, Track as PylastTrack
+from pylast import TopItem
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,7 +188,6 @@ class SyncService:
             db_artist_tag = await self.scrobble_repo.check_artist_tag(artist_name=artist_name, tag=tag_name)
             if db_artist_tag:
                 db_artist_tag.weight = weight
-                # logger.info(f"Updating artist tag in DB: {tag_name} for artist {artist_name}")
             else:
                 at = tables.ArtistTag(
                     artist_name=artist_name,
@@ -197,7 +195,6 @@ class SyncService:
                     weight=weight,
                 )
                 to_db.append(at)
-                # logger.info(f"Adding artist tag to DB: {tag_name} for artist {artist_name}")
 
         similar = lastfm_artist.get_similar(limit=20)
         for s in similar:
@@ -206,11 +203,8 @@ class SyncService:
             match = s.match
 
             db_similar_artist = await self.scrobble_repo.check_similar_artist(artist_name=artist_name, similar_artist_name=s_name)
-
             if db_similar_artist:
-                # match is the only field to update
                 db_similar_artist.match = match
-                # logger.info(f"Updating similar artist in DB: {s_name} for artist {artist_name}")
             else:
                 sa = tables.SimilarArtist(
                     artist_name=artist_name,
@@ -218,7 +212,6 @@ class SyncService:
                     match=match,
                 )
                 to_db.append(sa)
-                # logger.info(f"Adding similar artist to DB: {s_name} for artist {artist_name}")
 
         top_tracks: list[TopItem] = lastfm_artist.get_top_tracks(limit=20)
         top_tracks.sort(key=lambda x: x.weight , reverse=True)
@@ -231,7 +224,6 @@ class SyncService:
             if db_top_track:
                 db_top_track.weight = weight
                 db_top_track.rank = rank
-                # logger.info(f"Updating top track in DB: {title} for artist {artist_name}")
             else:
                 att = tables.ArtistTopTrack(
                     artist_name=artist_name,
@@ -240,7 +232,6 @@ class SyncService:
                     rank=rank
                 )
                 to_db.append(att)
-                # logger.info(f"Adding top track to DB: {track.title} for artist {artist_name}")
 
         top_albums: list[TopItem] = lastfm_artist.get_top_albums(limit=20)
         top_albums.sort(key=lambda x: x.weight, reverse=True)
@@ -253,7 +244,6 @@ class SyncService:
             if db_top_album:
                 db_top_album.weight = weight
                 db_top_album.rank = rank
-                # logger.info(f"Updating top album in DB: {title} for artist {artist_name}")
             else:
                 ata = tables.ArtistTopAlbum(
                     artist_name=artist_name,
@@ -262,7 +252,6 @@ class SyncService:
                     rank=rank
                 )
                 to_db.append(ata)
-                # logger.info(f"Adding top album to DB: {album.title} for artist {artist_name}")
 
         await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Artist data sync complete for {artist_name}.")
@@ -277,88 +266,65 @@ class SyncService:
             logger.warning(f"Skipping album with missing artist or title: {album}")
             return
 
-        lastfm_album = self.lastfm_service.network.get_album(
-            artist=lastfm_friendly(artist),
-            title=lastfm_friendly(title)
+        album_data = await self.lastfm_service.get_album(
+            artist=artist,
+            title=title,
+            with_tracks=True,
+            with_tags=True
         )
 
-        if not lastfm_album:
+        if not album_data:
             logger.warning(f"Album not found on Last.fm: {artist} - {title}")
             return
 
-        # Sniff out edge case occurrence where lastfm_album is returned but cannot be found when fetching details
-        try:
-            lastfm_album.get_mbid()
-        except WSError as e:
-            logger.warning(f"Error fetching album details from Last.fm for {artist} - {title}: {e}")
-            return
-
-        mbid = lastfm_album.get_mbid()
-        url = lastfm_album.get_url()
-        wiki = lastfm_album.get_wiki_summary()
-        cover_image = lastfm_album.get_cover_image()
-        user_playcount = lastfm_album.get_userplaycount()
-        listener_count = lastfm_album.get_listener_count()
-
         db_album: tables.Album = await self.scrobble_repo.get_album(album_name=title, artist_name=artist)
         if db_album:
-            db_album.mbid = mbid
-            db_album.url = url
-            db_album.wiki = wiki
-            db_album.cover_image = cover_image
-            db_album.user_playcount = user_playcount
-            db_album.listener_count = listener_count
+            db_album.mbid = album_data.mbid
+            db_album.url = album_data.url
+            db_album.wiki = album_data.wiki
+            db_album.cover_image = album_data.cover_image
+            db_album.user_playcount = album_data.user_playcount
+            db_album.listener_count = album_data.listener_count
             logger.info(f"Updating album in DB: {artist}")
         else:
             a = tables.Album(
                 title=title,
                 artist_name=artist,
-                mbid=mbid,
-                url=url,
-                wiki=wiki,
-                cover_image=cover_image,
-                user_playcount=user_playcount,
-                listener_count=listener_count,
+                mbid=album_data.mbid,
+                url=album_data.url,
+                wiki=album_data.wiki,
+                cover_image=album_data.cover_image,
+                user_playcount=album_data.user_playcount,
+                listener_count=album_data.listener_count,
             )
             to_db.append(a)
             logger.info(f"Adding album to DB: {title}")
 
-        top_tags: list[TopItem] = lastfm_album.get_top_tags()
-        for tag in top_tags:
-            tag_name = tag.item.name
-            weight = int(tag.weight)
-
-            db_album_tag = await self.scrobble_repo.check_album_tag(album_name=title, tag=tag_name, artist_name=artist)
-            if db_album_tag:
-                db_album_tag.weight = weight
-                # logger.info(f"Updating album tag in DB: {tag_name} for album {title}")
+        for tag in album_data.tags:
+            db_album_tag = await self.scrobble_repo.check_album_tag(album_name=title, tag=tag["tag_name"], artist_name=artist)
+            if db_album_tag and db_album_tag.weight != tag["weight"]:
+                db_album_tag.weight = tag["weight"]
             else:
                 at = tables.AlbumTag(
                     album_name=title,
                     artist_name=artist,
-                    tag=tag_name,
-                    weight=weight,
+                    tag=tag["tag_name"],
+                    weight=tag["weight"],
                 )
                 to_db.append(at)
-                # logger.info(f"Adding album tag to DB: {tag_name} for album {title}")
 
-        album_tracks: list[PylastTrack] = lastfm_album.get_tracks()
-        for order, track in enumerate(album_tracks, start=1):
-            track_title = track.title
-
-            db_album_track: tables.AlbumTrack = await self.scrobble_repo.check_album_track(album_name=title, track_name=track_title)
-            if db_album_track:
-                db_album_track.order = order
-                # logger.info(f"Updating track in DB: {track_title} for album {title}")
+        for track in album_data.tracks:
+            db_album_track: tables.AlbumTrack = await self.scrobble_repo.check_album_track(album_name=title, track_name=track["track_name"])
+            if db_album_track and db_album_track.order != track["order"]:
+                db_album_track.order = track["order"]
             else:
                 at = tables.AlbumTrack(
                     album_name=title,
-                    track_name=track_title,
+                    track_name=track["track_name"],
                     artist_name=artist,
-                    order=order
+                    order=track["order"]
                 )
                 to_db.append(at)
-                # logger.info(f"Adding track to DB: {track_title} for album {title} by {artist}")
 
         await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Album data sync complete for {title} by {artist}.")
@@ -367,76 +333,55 @@ class SyncService:
         to_db = []
         title = track[0]
         artist = track[1]
-        lastfm_track = self.lastfm_service.network.get_track(
-            artist=lastfm_friendly(artist),
-            title=lastfm_friendly(title)
-        )
-
-        mbid = lastfm_track.get_mbid()
-        url = lastfm_track.get_url()
-        wiki = lastfm_track.get_wiki_summary()
-        duration = lastfm_track.get_duration()
-        cover_image = lastfm_track.get_cover_image()
-        user_loved = lastfm_track.get_userloved()
-        user_playcount = lastfm_track.get_userplaycount()
-        listener_count = lastfm_track.get_listener_count()
-        listener_playcount = lastfm_track.get_playcount()
+        track_data = await self.lastfm_service.get_track(track_name=title, artist_name=artist)
 
         db_track: tables.Track = await self.scrobble_repo.get_track(track_name=title, artist_name=artist)
         if db_track:
-            db_track.mbid = mbid
-            db_track.url = url
-            db_track.wiki = wiki
-            db_track.duration = duration
-            db_track.cover_image = cover_image
-            db_track.user_loved = user_loved
-            db_track.user_playcount = user_playcount
-            db_track.listener_count = listener_count
-            db_track.listener_playcount = listener_playcount
+            db_track.mbid = track_data.mbid
+            db_track.url = track_data.url
+            db_track.wiki = track_data.wiki
+            db_track.duration = track_data.duration
+            db_track.cover_image = str(track_data.cover_image)
+            db_track.user_loved = track_data.user_loved
+            db_track.user_playcount = track_data.user_playcount
+            db_track.listener_count = track_data.listener_count
+            db_track.listener_playcount = track_data.listener_playcount
             logger.info(f"Updating track in DB: {artist}")
         else:
             t = tables.Track(
                 title=title,
                 artist_name=artist,
-                mbid=mbid,
-                url=url,
-                wiki=wiki,
-                cover_image=cover_image,
-                user_loved=user_loved,
-                user_playcount=user_playcount,
-                listener_count=listener_count,
-                listener_playcount=listener_playcount,
+                mbid=track_data.mbid,
+                url=str(track_data.url),
+                wiki=track_data.wiki,
+                cover_image=str(track_data.cover_image),
+                user_loved=track_data.user_loved,
+                user_playcount=track_data.user_playcount,
+                listener_count=track_data.listener_count,
+                listener_playcount=track_data.listener_playcount,
             )
             to_db.append(t)
             logger.info(f"Adding track to DB: {title}")
 
-        similar_tracks = lastfm_track.get_similar(limit=20)
-        for s in similar_tracks:
-            s_track = s.item
-            s_name = s_track.title
-            s_artist_name = s_track.artist.name
-            match = s.match
-
+        for st in track_data.similar_tracks:
             db_similar_track = await self.scrobble_repo.check_similar_track(
                 track_name=title,
                 artist_name=artist,
-                similar_track_name=s_name,
-                similar_track_artist_name=s_artist_name
+                similar_track_name=st.similar_track_name,
+                similar_track_artist_name=st.similar_track_artist_name
             )
 
             if db_similar_track:
-                db_similar_track.match = match
-                # logger.info(f"Updating similar track in DB: {s_name} for track {title}")
+                db_similar_track.match = st.match
             else:
                 st = tables.SimilarTrack(
                     track_name=title,
                     artist_name=artist,
-                    similar_track_name=s_name,
-                    similar_track_artist_name=s_artist_name,
-                    match=match,
+                    similar_track_name=st.similar_track_name,
+                    similar_track_artist_name=st.similar_track_artist_name,
+                    match=st.match,
                 )
                 to_db.append(st)
-                # logger.info(f"Adding similar track to DB: {s_name} for track {title}")
 
         await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Track data sync complete for {title} by {artist}.")

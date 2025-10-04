@@ -1,4 +1,5 @@
 import spotipy
+from loguru import logger
 from spotipy.oauth2 import SpotifyOAuth
 
 from core import config
@@ -24,6 +25,7 @@ class SpotifyService:
             scope=scope
         )
         self.spotify = spotipy.Spotify(auth_manager=auth)
+        logger.info(f'Spotify API connected.')
 
 
     async def get_spotify_account_information(self) -> SpotifyUser | None:

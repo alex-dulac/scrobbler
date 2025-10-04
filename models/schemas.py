@@ -4,6 +4,8 @@ from enum import Enum
 
 from pydantic import BaseModel, HttpUrl
 
+from core import config
+
 
 class Artist(BaseModel):
     id: str = None
@@ -17,10 +19,15 @@ class Album(BaseModel):
     title: str = None
     artist_name: str = None
     release_date: str = None
-    image_url: str = None
+    cover_image: Optional[str] = None
     url: str = None
-    tracks: list[str] = None
+    tracks: Optional[list[Any]] = None
+    tags: Optional[list[Any]] = None
     playcount: int = None
+    mbid: str = None
+    wiki: Optional[str] = None
+    user_playcount: Optional[int] = None
+    listener_count: Optional[int] = None
 
 
 class Track(BaseModel):
@@ -125,9 +132,32 @@ class AppleMusicTrack(Track):
         return cls(**mapped)
 
 
+class SimilarTrack(BaseModel):
+    track_name: str = None
+    artist_name: str = None
+    similar_track_name: str = None
+    similar_track_artist_name: str = None
+    match: int = None
+
+
 class LastFmTrack(Track):
-    scrobbled_at: Optional[str] = None
+    scrobbled_at: Optional[datetime] = None
+    user_loved: Optional[bool] = None
     loved_at: Optional[str] = None
+    wiki: Optional[str] = None
+    mbid: Optional[str] = None
+    url: Optional[HttpUrl] = None
+    cover_image: Optional[HttpUrl] = None
+    user_playcount: Optional[int] = None
+    listener_count: Optional[int] = None
+    listener_playcount: Optional[int] = None
+    similar_tracks: Optional[list[SimilarTrack]] = None
+
+    @property
+    def scrobbled_at_formatted(self) -> Optional[str]:
+        if self.scrobbled_at:
+            return self.scrobbled_at.strftime(config.DATETIME_FORMAT)
+        return None
 
     def to_dict(self) -> dict:
         return {
@@ -135,6 +165,7 @@ class LastFmTrack(Track):
             "artist": self.artist,
             "album": self.album,
             "scrobbled_at": self.scrobbled_at,
+            "scrobbled_at_formatted": self.scrobbled_at_formatted,
             "loved_at": self.loved_at,
             "clean_name": self.clean_name,
             "clean_album": self.clean_album,

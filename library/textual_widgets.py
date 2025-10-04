@@ -6,13 +6,14 @@ from rich.console import RenderableType, Group
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
 from textual.containers import Container
-from textual.widgets import Static, Button
+from textual.widgets import Static, Button, Input
 
 from core import config
 from core.database import get_async_session
 from library.session_scrobbles import SessionScrobbles
 from models.schemas import Track, LastFmTrack
 from repositories.repository import ScrobbleRepository
+from services.lastfm_service import LastFmService
 
 css = """
     Button {
@@ -49,6 +50,7 @@ class TuiViews(str, Enum):
     TRACK_HISTORY = "track-history"
     ARTIST_STATS = "artist-stats"
     SESSION = "session-info"
+    MANUAL_SCROBBLE = "manual-scrobble"
 
 
 playback_controls = Container(
@@ -67,6 +69,7 @@ view_controls = Container(
     Button("Track History", id="show-track-history"),
     Button("Artist Stats", id="show-artist-stats"),
     Button("Session", id="show-session"),
+    Button("Manual Scrobble", id="show-manual-scrobble"),
     classes="controls",
     id="view-controls"
 )
@@ -78,8 +81,8 @@ class SongInfoWidget(Static):
 
 
 class ScrobbleProgressBar(Static):
-    def __init__(self, id=None):
-        super().__init__(id=id)
+    def __init__(self):
+        super().__init__(id="scrobble-progress")
         self.progress = 0.0
         self.progress_bar = Progress(
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%", justify="right"),
@@ -97,8 +100,8 @@ class ScrobbleProgressBar(Static):
 
 
 class TrackHistoryWidget(Static):
-    def __init__(self, id=None):
-        super().__init__(id=id, classes="content-container")
+    def __init__(self):
+        super().__init__(id=TuiViews.TRACK_HISTORY, classes="content-container")
         self.start_year: int = datetime.today().year
         self.current_year: int = datetime.today().year
         self.all_years = range(self.start_year, self.current_year + 1)
@@ -118,8 +121,7 @@ class TrackHistoryWidget(Static):
 
         year_counts = defaultdict(int)
         for scrobble in scrobbles:
-            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
-            year_counts[dt.year] += 1
+            year_counts[scrobble.scrobbled_at.year] += 1
 
         chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name}", expand=True)
         chart_table.add_column("Year", style="cyan", width=8)
@@ -158,8 +160,7 @@ class TrackHistoryWidget(Static):
         history_table.add_column("Timestamp", style="cyan")
 
         for i, scrobble in enumerate(scrobbles):
-            dt = datetime.strptime(scrobble.scrobbled_at, config.DATETIME_FORMAT)
-            timestamp = dt.strftime(config.DATETIME_FORMAT)
+            timestamp = scrobble.scrobbled_at.strftime(config.DATETIME_FORMAT)
             history_table.add_row(
                 str(i + 1),
                 timestamp
@@ -176,8 +177,8 @@ class TrackHistoryWidget(Static):
 
 
 class ArtistStatsWidget(Static):
-    def __init__(self, id=None, db_connected: bool = False):
-        super().__init__(id=id, classes="content-container")
+    def __init__(self, db_connected: bool = False):
+        super().__init__(id=TuiViews.ARTIST_STATS, classes="content-container")
         self.db_connected = db_connected
         if not self.db_connected:
             self.update("Database not connected")
@@ -235,8 +236,8 @@ class ArtistStatsWidget(Static):
 
 
 class SessionInfoWidget(Static):
-    def __init__(self, session: SessionScrobbles, id=None):
-        super().__init__(id=id, classes="content-container")
+    def __init__(self, session: SessionScrobbles):
+        super().__init__(id=TuiViews.SESSION, classes="content-container")
         self.session = session
         self.update_session_info()
 
@@ -280,8 +281,32 @@ class SessionInfoWidget(Static):
                 scrobble.name,
                 scrobble.artist,
                 scrobble.album,
-                scrobble.scrobbled_at
+                scrobble.scrobbled_at_formatted
             )
 
         combined_display = Group(summary_table, "", scrobbles_table)
         self.update(combined_display)
+
+
+class ManualScrobbleWidget(Container):
+    def __init__(self, lastfm: LastFmService):
+        super().__init__(id=TuiViews.MANUAL_SCROBBLE, classes="content-container")
+        self.lastfm = lastfm
+        self.album_input = Input(placeholder="Enter album name", id="album-input")
+        self.artist_input = Input(placeholder="Enter artist name", id="artist-input")
+        self.submit_button = Button("Search", id="search")
+        self.result_display = Static(id="result")
+
+    def on_mount(self) -> None:
+        self.mount(Static("Album Search", classes="header"))
+        self.mount(self.album_input)
+        self.mount(self.artist_input)
+        self.mount(self.submit_button)
+        self.mount(self.result_display)
+
+    async def on_button_pressed(self, event):
+        if event.button.id == "search":
+            album_name = self.album_input.value
+            artist_name = self.artist_input.value
+            result = await self.lastfm.get_album(album_name, artist_name, True)
+            self.result_display.update(result.__str__() if result else "No results found")

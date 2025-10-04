@@ -6,14 +6,16 @@ from textual.widgets import Header, Footer, Button
 from textual import work
 from rich.text import Text
 
-from core.database import session_manager
+from core.database import session_manager, get_async_session
 from library.comparison import Comparison
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
+from models.db import Scrobble
 from models.schemas import Track
+from repositories.repository import ScrobbleRepository
 from services.apple_music_service import poll_apple_music, playback_control
-from services.spotify_service import SpotifyService
-from services.lastfm_service import LastFmService
+from services.spotify_service import SpotifyService, get_spotify_service
+from services.lastfm_service import LastFmService, get_lastfm_service
 import library.textual_widgets as widgets
 
 
@@ -39,8 +41,8 @@ class ScrobblerApp(App):
     def __init__(self):
         super().__init__()
         self.state: AppState = AppState()
-        self.lastfm: LastFmService = LastFmService()
-        self.spotify: SpotifyService = SpotifyService()
+        self.lastfm: LastFmService | None = None
+        self.spotify: SpotifyService | None = None
         self.poll_service = poll_apple_music
         self.current_view = widgets.TuiViews.TRACK_HISTORY
         self.db_connected: bool = False
@@ -50,10 +52,11 @@ class ScrobblerApp(App):
         yield widgets.playback_controls
         yield widgets.view_controls
         yield widgets.SongInfoWidget(id="song-info")
-        yield widgets.ScrobbleProgressBar(id="scrobble-progress")
-        yield widgets.TrackHistoryWidget(id=widgets.TuiViews.TRACK_HISTORY)
-        yield widgets.ArtistStatsWidget(id=widgets.TuiViews.ARTIST_STATS)
-        yield widgets.SessionInfoWidget(self.state.session, id=widgets.TuiViews.SESSION)
+        yield widgets.ScrobbleProgressBar()
+        yield widgets.TrackHistoryWidget()
+        yield widgets.ArtistStatsWidget()
+        yield widgets.SessionInfoWidget(self.state.session)
+        yield widgets.ManualScrobbleWidget(lastfm=self.lastfm)
         yield Footer()
 
     def get_track_history(self) -> widgets.TrackHistoryWidget:
@@ -65,18 +68,21 @@ class ScrobblerApp(App):
     def get_session_info(self) -> widgets.SessionInfoWidget:
         return self.query_one(widgets.SessionInfoWidget)
 
+    def get_album_form(self) -> widgets.ManualScrobbleWidget:
+        return self.query_one(widgets.ManualScrobbleWidget)
+
     def update_progress_bar(self) -> None:
-        value = 0.0
-        text = WAITING
-        if self.state.current_song:
-            value = self.state.current_song.scrobble_progress_value
-            text = self.state.current_song.scrobble_progress_text
+        value = 0.0 if not self.state.current_song else self.state.current_song.scrobble_progress_value
+        text = WAITING if not self.state.current_song else self.state.current_song.scrobble_progress_text
         self.query_one(widgets.ScrobbleProgressBar).update_progress(value, text)
 
     def update_song_info(self, info: VisualType) -> None:
         self.query_one(widgets.SongInfoWidget).update(info)
 
     async def on_mount(self) -> None:
+        self.lastfm = await get_lastfm_service()
+        self.spotify = await get_spotify_service()
+
         try:
             await session_manager.init_db()
             self.db_connected = True
@@ -96,20 +102,20 @@ class ScrobblerApp(App):
         history_chart = self.get_track_history()
         artist_stats = self.get_artist_stats()
         session = self.get_session_info()
+        album_form = self.get_album_form()
+        views = [history_chart, artist_stats, session, album_form]
+        for view in views:
+            view.display = False
 
         match self.current_view:
             case widgets.TuiViews.TRACK_HISTORY:
-                artist_stats.display = False
                 history_chart.display = True
-                session.display = False
             case widgets.TuiViews.ARTIST_STATS:
                 artist_stats.display = True
-                history_chart.display = False
-                session.display = False
             case widgets.TuiViews.SESSION:
-                artist_stats.display = False
-                history_chart.display = False
                 session.display = True
+            case widgets.TuiViews.MANUAL_SCROBBLE:
+                album_form.display = True
 
     @work
     async def action_quit(self) -> None:
@@ -150,6 +156,9 @@ class ScrobblerApp(App):
         elif event.button.id == "show-session":
             self.current_view = widgets.TuiViews.SESSION
             self.update_view_visibility()
+        elif event.button.id == "show-manual-scrobble":
+            self.current_view = widgets.TuiViews.MANUAL_SCROBBLE
+            self.update_view_visibility()
         # playback
         elif event.button.id == "play-pause":
             self.playback_control(PlaybackAction.PAUSE)
@@ -175,6 +184,15 @@ class ScrobblerApp(App):
             self.state.session.remove_pending(self.state.current_song)
             self.state.current_song.scrobbled = True
             self.get_session_info().update_session_info()
+            if self.db_connected:
+                scrobble = Scrobble(
+                    artist_name=scrobbled_track.artist,
+                    album_name=scrobbled_track.album,
+                    track_name=scrobbled_track.name,
+                    scrobbled_at=scrobbled_track.scrobbled_at
+                )
+                repo = ScrobbleRepository(db=await get_async_session())
+                await repo.add_and_commit([scrobble])
         else:
             self.state.session.add_pending(self.state.current_song)
             self.update_song_info(format_song_info(self.state.current_song, "⏱ Pending scrobble (no internet)"))
