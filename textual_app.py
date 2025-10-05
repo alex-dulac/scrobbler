@@ -56,7 +56,7 @@ class ScrobblerApp(App):
         yield widgets.TrackHistoryWidget()
         yield widgets.ArtistStatsWidget()
         yield widgets.SessionInfoWidget(self.state.session)
-        yield widgets.ManualScrobbleWidget(lastfm=self.lastfm)
+        yield widgets.ManualScrobbleWidget()
         yield Footer()
 
     def get_track_history(self) -> widgets.TrackHistoryWidget:
@@ -87,11 +87,13 @@ class ScrobblerApp(App):
             await session_manager.init_db()
             self.db_connected = True
             self.get_artist_stats().db_connected = True
+            self.get_manual_scrobble().db_connected = True
             self.notify("Database connected successfully.")
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
 
         self.get_track_history().set_years(self.state.user.registered.year)
+        self.get_manual_scrobble().lastfm = self.lastfm
         self.set_interval(1, self.update_display)
         self.update_song_info(WAITING)
         self.update_progress_bar()
@@ -102,8 +104,8 @@ class ScrobblerApp(App):
         history_chart = self.get_track_history()
         artist_stats = self.get_artist_stats()
         session = self.get_session_info()
-        album_form = self.get_album_form()
-        views = [history_chart, artist_stats, session, album_form]
+        manual_scrobble = self.get_manual_scrobble()
+        views = [history_chart, artist_stats, session, manual_scrobble]
         for view in views:
             view.display = False
 
@@ -115,7 +117,7 @@ class ScrobblerApp(App):
             case widgets.TuiViews.SESSION:
                 session.display = True
             case widgets.TuiViews.MANUAL_SCROBBLE:
-                album_form.display = True
+                manual_scrobble.display = True
 
     @work
     async def action_quit(self) -> None:

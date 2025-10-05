@@ -11,6 +11,8 @@ from textual.widgets import Static, Button, Input
 from core import config
 from core.database import get_async_session
 from library.session_scrobbles import SessionScrobbles
+from library.utils import clean_up_title
+from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.repository import ScrobbleRepository
 from services.lastfm_service import LastFmService
@@ -88,6 +90,11 @@ view_controls = Container(
 )
 
 
+async def get_scrobble_repository() -> ScrobbleRepository:
+    db = await get_async_session()
+    return ScrobbleRepository(db=db)
+
+
 class SongInfoWidget(Static):
     def render(self) -> RenderableType:
         return self.renderable
@@ -110,6 +117,12 @@ class ScrobbleProgressBar(Static):
         self.progress = value
         self.progress_bar.update(self.task_id, completed=percentage, description=description)
         self.update(self.progress_bar)
+
+
+class BaseDbWidget(Static):
+    def __init__(self, id = None, db_connected: bool = False):
+        super().__init__(id=id, classes="content-container")
+        self.db_connected = db_connected
 
 
 class TrackHistoryWidget(Static):
@@ -189,14 +202,12 @@ class TrackHistoryWidget(Static):
         self.update(combined_display)
 
 
-class ArtistStatsWidget(Static):
+class ArtistStatsWidget(BaseDbWidget):
     def __init__(self, db_connected: bool = False):
-        super().__init__(id=TuiViews.ARTIST_STATS, classes="content-container")
-        self.db_connected = db_connected
-        if not self.db_connected:
-            self.update("Database not connected")
-        else:
-            self.update("No song selected")
+        super().__init__(
+            id=TuiViews.ARTIST_STATS,
+            db_connected=db_connected,
+        )
 
     async def update_artist_stats(self, artist_name: Track) -> None:
         if not self.db_connected:
@@ -207,8 +218,7 @@ class ArtistStatsWidget(Static):
             self.update("No song selected")
             return
 
-        db = await get_async_session()
-        repo = ScrobbleRepository(db=db)
+        repo = await get_scrobble_repository()
 
         top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
 
@@ -301,14 +311,21 @@ class SessionInfoWidget(Static):
         self.update(combined_display)
 
 
-class ManualScrobbleWidget(Container):
-    def __init__(self, lastfm: LastFmService):
-        super().__init__(id=TuiViews.MANUAL_SCROBBLE, classes="content-container")
-        self.lastfm = lastfm
+class ManualScrobbleWidget(BaseDbWidget):
+    def __init__(self, db_connected: bool = False):
+        super().__init__(
+            id=TuiViews.MANUAL_SCROBBLE,
+            db_connected=db_connected,
+        )
+        self.lastfm: LastFmService | None = None
         self.album_input = Input(placeholder="Enter album name", id="album-input")
+        self.album = None
         self.artist_input = Input(placeholder="Enter artist name", id="artist-input")
+        self.artist = None
         self.submit_button = Button("Search", id="search")
         self.result_display = Static(id="result")
+        self.scrobble_button = Button("Scrobble All", id="scrobble-all")
+        self.tracks: list[Track] = []
 
     def on_mount(self) -> None:
         self.mount(Static("Album Search", classes="header"))
@@ -317,9 +334,51 @@ class ManualScrobbleWidget(Container):
         self.mount(self.submit_button)
         self.mount(self.result_display)
 
+    async def handle_batch_scrobble(self):
+        if not self.db_connected:
+            self.update("Database not connected")
+            return
+
+        repo = await get_scrobble_repository()
+
+        to_db = []
+        for t in self.tracks:
+            to_scrobble = Track(
+                clean_name=await clean_up_title(t['track_name']),
+                artist=self.artist,
+                clean_album=self.album,
+            )
+            scrobbled_track = await self.lastfm.scrobble(to_scrobble)
+            if scrobbled_track:
+                db_obj = Scrobble(
+                    track_name=scrobbled_track.name,
+                    artist_name=scrobbled_track.artist,
+                    album_name=scrobbled_track.album,
+                    scrobbled_at=scrobbled_track.scrobbled_at,
+                )
+                to_db.append(db_obj)
+
+        if len(to_db) > 0:
+            await repo.add_and_commit(to_db)
+            self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
+
     async def on_button_pressed(self, event):
         if event.button.id == "search":
-            album_name = self.album_input.value
-            artist_name = self.artist_input.value
-            result = await self.lastfm.get_album(album_name, artist_name, True)
-            self.result_display.update(result.__str__() if result else "No results found")
+            self.album = self.album_input.value
+            self.artist = self.artist_input.value
+            result = await self.lastfm.get_album(self.album, self.artist, True)
+            if result and result.tracks:
+                self.tracks = result.tracks
+                tracks_list = "\n".join([f"{t['order']}. {t['track_name']}" for t in self.tracks])
+                self.result_display.update(f"Album: {self.album}\nArtist: {self.artist}\nTracks:\n{tracks_list}")
+                if not self.scrobble_button.is_mounted:
+                    await self.mount(self.scrobble_button)
+            else:
+                self.result_display.update("No results found")
+                if self.scrobble_button.is_mounted:
+                    await self.scrobble_button.remove()
+        elif event.button.id == "scrobble-all":
+            await self.handle_batch_scrobble()
+
+
+
