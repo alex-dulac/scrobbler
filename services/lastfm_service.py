@@ -159,23 +159,23 @@ class LastFmService:
             logger.error(f"Failed to update Last.fm now playing: {e}")
             return False
 
-    async def scrobble(self, current_song: Track) -> LastFmTrack | None:
-        artist = current_song.artist
-        track = current_song.clean_name
-        album = current_song.clean_album
-        timestamp = int(time.time())
+    async def scrobble(self, track: Track, scrobbled_at: datetime = None) -> LastFmTrack | None:
+        artist = track.artist
+        title = track.clean_name
+        album = track.clean_album
+        timestamp = int(scrobbled_at.timestamp()) if scrobbled_at else int(time.time())
 
         try:
             self.network.scrobble(
                 artist=artist,
-                title=track,
+                title=title,
                 timestamp=timestamp,
                 album=album
             )
-            logger.info(f"Scrobbled to LastFm: {current_song.display_name}")
+            logger.info(f"Scrobbled to LastFm: {track.display_name}")
             return LastFmTrack(
-                name=track,
-                clean_name=track,
+                name=title,
+                clean_name=title,
                 artist=artist,
                 album=album,
                 clean_album=album,
