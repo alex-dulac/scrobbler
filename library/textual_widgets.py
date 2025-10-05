@@ -53,23 +53,36 @@ class TuiViews(str, Enum):
     MANUAL_SCROBBLE = "manual-scrobble"
 
 
+class TuiIds(str, Enum):
+    APPLE_MUSIC = "apple-music"
+    SPOTIFY = "spotify"
+    PLAY_PAUSE = "play-pause"
+    PREVIOUS_TRACK = "previous-track"
+    NEXT_TRACK = "next-track"
+    QUIT = "quit"
+    SHOW_TRACK_HISTORY = "show-track-history"
+    SHOW_ARTIST_STATS = "show-artist-stats"
+    SHOW_SESSION = "show-session"
+    SHOW_MANUAL_SCROBBLE = "show-manual-scrobble"
+
+
 playback_controls = Container(
-    Button("Apple Music", id="apple-music", classes="active-button"),
-    Button("Spotify", id="spotify"),
-    Button("⏯ Play/Pause", id="play-pause"),
-    Button("⏮ Back", id="previous-track"),
-    Button("⏭ Skip", id="next-track"),
-    Button("Quit", id="quit", variant="error"),
+    Button("Apple Music", id=TuiIds.APPLE_MUSIC, classes="active-button"),
+    Button("Spotify", id=TuiIds.SPOTIFY),
+    Button("⏯ Play/Pause", id=TuiIds.PLAY_PAUSE),
+    Button("⏮ Back", id=TuiIds.PREVIOUS_TRACK),
+    Button("⏭ Skip", id=TuiIds.NEXT_TRACK),
+    Button("Quit", id=TuiIds.QUIT, variant="error"),
     classes="controls",
     id="controls"
 )
 
 
 view_controls = Container(
-    Button("Track History", id="show-track-history"),
-    Button("Artist Stats", id="show-artist-stats"),
-    Button("Session", id="show-session"),
-    Button("Manual Scrobble", id="show-manual-scrobble"),
+    Button("Track History", id=TuiIds.SHOW_TRACK_HISTORY),
+    Button("Artist Stats", id=TuiIds.SHOW_ARTIST_STATS),
+    Button("Session", id=TuiIds.SHOW_SESSION),
+    Button("Manual Scrobble", id=TuiIds.SHOW_MANUAL_SCROBBLE),
     classes="controls",
     id="view-controls"
 )

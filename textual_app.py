@@ -68,7 +68,7 @@ class ScrobblerApp(App):
     def get_session_info(self) -> widgets.SessionInfoWidget:
         return self.query_one(widgets.SessionInfoWidget)
 
-    def get_album_form(self) -> widgets.ManualScrobbleWidget:
+    def get_manual_scrobble(self) -> widgets.ManualScrobbleWidget:
         return self.query_one(widgets.ManualScrobbleWidget)
 
     def update_progress_bar(self) -> None:
@@ -133,39 +133,49 @@ class ScrobblerApp(App):
         self.exit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        # main
-        if event.button.id == "apple-music":
-            self.state.active_integration = Integration.APPLE_MUSIC
-            self.poll_service = poll_apple_music
-            self.query_one("#apple-music").add_class("active-button")
-            self.query_one("#spotify").remove_class("active-button")
-        elif event.button.id == "spotify":
-            self.state.active_integration = Integration.SPOTIFY
-            self.poll_service = self.spotify.poll_spotify
-            self.query_one("#spotify").add_class("active-button")
-            self.query_one("#apple-music").remove_class("active-button")
-        elif event.button.id == "quit":
-            self.action_quit()
-        # views
-        elif event.button.id == "show-track-history":
-            self.current_view = widgets.TuiViews.TRACK_HISTORY
-            self.update_view_visibility()
-        elif event.button.id == "show-artist-stats":
-            self.current_view = widgets.TuiViews.ARTIST_STATS
-            self.update_view_visibility()
-        elif event.button.id == "show-session":
-            self.current_view = widgets.TuiViews.SESSION
-            self.update_view_visibility()
-        elif event.button.id == "show-manual-scrobble":
-            self.current_view = widgets.TuiViews.MANUAL_SCROBBLE
-            self.update_view_visibility()
-        # playback
-        elif event.button.id == "play-pause":
-            self.playback_control(PlaybackAction.PAUSE)
-        elif event.button.id == "previous-track":
-            self.playback_control(PlaybackAction.PREVIOUS)
-        elif event.button.id == "next-track":
-            self.playback_control(PlaybackAction.NEXT)
+        def get_spotify_button():
+            return self.query_one(f"#{widgets.TuiIds.SPOTIFY}")
+        def get_apple_music_button():
+            return self.query_one(f"#{widgets.TuiIds.APPLE_MUSIC}")
+        active_css = "active-button"
+
+        match event.button.id:
+            case widgets.TuiIds.APPLE_MUSIC:
+                self.state.active_integration = Integration.APPLE_MUSIC
+                self.poll_service = poll_apple_music
+                get_apple_music_button().add_class(active_css)
+                get_spotify_button().remove_class(active_css)
+            case widgets.TuiIds.SPOTIFY:
+                self.state.active_integration = Integration.SPOTIFY
+                self.poll_service = self.spotify.poll_spotify
+                get_spotify_button().add_class(active_css)
+                get_apple_music_button().remove_class(active_css)
+            case widgets.TuiIds.QUIT:
+                self.action_quit()
+            case widgets.TuiIds.SHOW_TRACK_HISTORY:
+                self.current_view = widgets.TuiViews.TRACK_HISTORY
+                self.update_view_visibility()
+            case widgets.TuiIds.SHOW_ARTIST_STATS:
+                if not self.db_connected:
+                    self.notify("Database not connected. Artist stats unavailable.", severity="warning")
+                    return
+                self.current_view = widgets.TuiViews.ARTIST_STATS
+                self.update_view_visibility()
+            case widgets.TuiIds.SHOW_SESSION:
+                self.current_view = widgets.TuiViews.SESSION
+                self.update_view_visibility()
+            case widgets.TuiIds.SHOW_MANUAL_SCROBBLE:
+                if not self.db_connected:
+                    self.notify("Database not connected. Manual scrobble unavailable.", severity="warning")
+                    return
+                self.current_view = widgets.TuiViews.MANUAL_SCROBBLE
+                self.update_view_visibility()
+            case widgets.TuiIds.PLAY_PAUSE:
+                self.playback_control(PlaybackAction.PAUSE)
+            case widgets.TuiIds.NEXT_TRACK:
+                self.playback_control(PlaybackAction.NEXT)
+            case widgets.TuiIds.PREVIOUS_TRACK:
+                self.playback_control(PlaybackAction.PREVIOUS)
 
     @work
     async def playback_control(self, action: PlaybackAction) -> None:
