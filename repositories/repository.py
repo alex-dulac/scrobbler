@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.database import get_db
 from models.db import (
     Album,
     AlbumTag,
@@ -228,3 +230,8 @@ class ScrobbleRepository:
         result = await self.db.execute(query)
         return result.all()
 
+
+@asynccontextmanager
+async def get_scrobble_repository():
+    async with get_db() as session:
+        yield ScrobbleRepository(db=session)

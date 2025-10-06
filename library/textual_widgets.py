@@ -9,12 +9,11 @@ from textual.containers import Container
 from textual.widgets import Static, Button, Input
 
 from core import config
-from core.database import get_async_session
 from library.session_scrobbles import SessionScrobbles
 from library.utils import clean_up_title
 from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
-from repositories.repository import ScrobbleRepository
+from repositories.repository import get_scrobble_repository
 from services.lastfm_service import LastFmService
 
 css = """
@@ -88,11 +87,6 @@ view_controls = Container(
     classes="controls",
     id="view-controls"
 )
-
-
-async def get_scrobble_repository() -> ScrobbleRepository:
-    db = await get_async_session()
-    return ScrobbleRepository(db=db)
 
 
 class SongInfoWidget(Static):
@@ -218,9 +212,8 @@ class ArtistStatsWidget(BaseDbWidget):
             self.update("No song selected")
             return
 
-        repo = await get_scrobble_repository()
-
-        top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
+        async with get_scrobble_repository() as repo:
+            top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
 
         if not top_played_tracks:
             self.update(f"No scrobbles found for artist: {artist_name.artist}")
@@ -339,8 +332,6 @@ class ManualScrobbleWidget(BaseDbWidget):
             self.update("Database not connected")
             return
 
-        repo = await get_scrobble_repository()
-
         to_db = []
         for t in self.tracks:
             to_scrobble = Track(
@@ -359,8 +350,9 @@ class ManualScrobbleWidget(BaseDbWidget):
                 to_db.append(db_obj)
 
         if len(to_db) > 0:
-            await repo.add_and_commit(to_db)
-            self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
+            async with get_scrobble_repository() as repo:
+                await repo.add_and_commit(to_db)
+                self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
 
     async def on_button_pressed(self, event):
         if event.button.id == "search":
@@ -379,6 +371,12 @@ class ManualScrobbleWidget(BaseDbWidget):
                     await self.scrobble_button.remove()
         elif event.button.id == "scrobble-all":
             await self.handle_batch_scrobble()
+            self.album_input.value = ""
+            self.artist_input.value = ""
+            self.result_display.update("")
+            if self.scrobble_button.is_mounted:
+                await self.scrobble_button.remove()
+            self.tracks = []
 
 
 

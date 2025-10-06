@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import Optional, AsyncGenerator
 
 from sqlalchemy import AsyncAdaptedQueuePool
@@ -38,6 +39,7 @@ class SessionManager:
 session_manager = SessionManager()
 
 
+@asynccontextmanager
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if not session_manager.session_factory:
         raise RuntimeError("Database session factory is not initialized.")
@@ -48,6 +50,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def get_async_session() -> AsyncSession:
-    db_gen = get_db()
-    return await db_gen.__anext__()

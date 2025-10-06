@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from loguru import logger
@@ -7,6 +8,7 @@ from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import models.db as tables
+from core.database import get_db
 from repositories.filters import ScrobbleFilter
 from repositories.repository import ScrobbleRepository
 from library.utils import lastfm_friendly, clean_up_title
@@ -387,3 +389,7 @@ class SyncService:
         logger.info(f"Track data sync complete for {title} by {artist}.")
 
 
+@asynccontextmanager
+async def get_sync_service():
+    async with get_db() as session:
+        yield SyncService(db=session)

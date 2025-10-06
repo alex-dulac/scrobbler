@@ -6,13 +6,13 @@ from textual.widgets import Header, Footer, Button
 from textual import work
 from rich.text import Text
 
-from core.database import session_manager, get_async_session
+from core.database import session_manager
 from library.comparison import Comparison
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
+from library.textual_widgets import get_scrobble_repository
 from models.db import Scrobble
 from models.schemas import Track
-from repositories.repository import ScrobbleRepository
 from services.apple_music_service import poll_apple_music, playback_control
 from services.spotify_service import SpotifyService, get_spotify_service
 from services.lastfm_service import LastFmService, get_lastfm_service
@@ -203,8 +203,8 @@ class ScrobblerApp(App):
                     track_name=scrobbled_track.name,
                     scrobbled_at=scrobbled_track.scrobbled_at
                 )
-                repo = ScrobbleRepository(db=await get_async_session())
-                await repo.add_and_commit([scrobble])
+                async with get_scrobble_repository() as repo:
+                    await repo.add_and_commit([scrobble])
         else:
             self.state.session.add_pending(self.state.current_song)
             self.update_song_info(format_song_info(self.state.current_song, "⏱ Pending scrobble (no internet)"))

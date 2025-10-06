@@ -1,14 +1,8 @@
 from fastapi import APIRouter, Depends
 
-from core.database import get_db
-from services.sync_service import SyncService
+from services.sync_service import SyncService, get_sync_service
 
 sync_router = APIRouter()
-
-
-async def get_sync_service():
-    async for db in get_db():
-        yield SyncService(db=db)
 
 
 @sync_router.get('/sync/scrobbles/')
