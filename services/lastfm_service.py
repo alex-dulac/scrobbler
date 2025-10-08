@@ -241,10 +241,16 @@ class LastFmService:
         if with_tracks:
             tracks = []
             for order, t in enumerate(album.get_tracks(), start=1):
-                tracks.append({
-                    "track_name": t.title,
-                    "order": order,
-                })
+                obj = Track(
+                    name=t.title,
+                    clean_name=await clean_up_title(t.title),
+                    artist=artist_name,
+                    album=album_title,
+                    clean_album=await clean_up_title(album_title),
+                    order=order,
+                    duration=t.get_duration()
+                )
+                tracks.append(obj)
 
         tags = None
         if with_tags:

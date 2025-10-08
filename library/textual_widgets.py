@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 
 from rich.console import RenderableType, Group
@@ -10,7 +10,6 @@ from textual.widgets import Static, Button, Input
 
 from core import config
 from library.session_scrobbles import SessionScrobbles
-from library.utils import clean_up_title
 from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.repository import get_scrobble_repository
@@ -305,6 +304,11 @@ class SessionInfoWidget(Static):
 
 
 class ManualScrobbleWidget(BaseDbWidget):
+    """
+    Widget for manually searching and scrobbling albums.
+    Allows user to input album name, artist name, and optional datetime.
+    Useful if you are old school like me and listen to CDs and vinyl records.
+    """
     def __init__(self, db_connected: bool = False):
         super().__init__(
             id=TuiViews.MANUAL_SCROBBLE,
@@ -312,10 +316,10 @@ class ManualScrobbleWidget(BaseDbWidget):
         )
         self.lastfm: LastFmService | None = None
         self.album_input = Input(placeholder="Enter album name", id="album-input")
-        self.album = None
         self.artist_input = Input(placeholder="Enter artist name", id="artist-input")
-        self.artist = None
-        self.submit_button = Button("Search", id="search")
+        self.dt_input = Input(placeholder="Enter around when you finished the album (2025-10-06 18:03:25)", id="datetime-input")
+        self.search_button = Button("Search", id="search")
+        self.clear_button = Button("Clear", id="clear")
         self.result_display = Static(id="result")
         self.scrobble_button = Button("Scrobble All", id="scrobble-all")
         self.tracks: list[Track] = []
@@ -324,22 +328,20 @@ class ManualScrobbleWidget(BaseDbWidget):
         self.mount(Static("Album Search", classes="header"))
         self.mount(self.album_input)
         self.mount(self.artist_input)
-        self.mount(self.submit_button)
+        self.mount(self.dt_input)
+        self.mount(
+            Container(
+                self.search_button,
+                self.clear_button,
+                classes="controls"
+            )
+        )
         self.mount(self.result_display)
 
     async def handle_batch_scrobble(self):
-        if not self.db_connected:
-            self.update("Database not connected")
-            return
-
         to_db = []
         for t in self.tracks:
-            to_scrobble = Track(
-                clean_name=await clean_up_title(t['track_name']),
-                artist=self.artist,
-                clean_album=self.album,
-            )
-            scrobbled_track = await self.lastfm.scrobble(to_scrobble)
+            scrobbled_track = await self.lastfm.scrobble(t, t.time_to_scrobble)
             if scrobbled_track:
                 db_obj = Scrobble(
                     track_name=scrobbled_track.name,
@@ -348,35 +350,63 @@ class ManualScrobbleWidget(BaseDbWidget):
                     scrobbled_at=scrobbled_track.scrobbled_at,
                 )
                 to_db.append(db_obj)
-
         if len(to_db) > 0:
+            if not self.db_connected:
+                self.update("Database not connected")
+                return
             async with get_scrobble_repository() as repo:
                 await repo.add_and_commit(to_db)
                 self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
 
-    async def on_button_pressed(self, event):
-        if event.button.id == "search":
-            self.album = self.album_input.value
-            self.artist = self.artist_input.value
-            result = await self.lastfm.get_album(self.album, self.artist, True)
-            if result and result.tracks:
-                self.tracks = result.tracks
-                tracks_list = "\n".join([f"{t['order']}. {t['track_name']}" for t in self.tracks])
-                self.result_display.update(f"Album: {self.album}\nArtist: {self.artist}\nTracks:\n{tracks_list}")
-                if not self.scrobble_button.is_mounted:
-                    await self.mount(self.scrobble_button)
-            else:
-                self.result_display.update("No results found")
-                if self.scrobble_button.is_mounted:
-                    await self.scrobble_button.remove()
-        elif event.button.id == "scrobble-all":
-            await self.handle_batch_scrobble()
-            self.album_input.value = ""
-            self.artist_input.value = ""
-            self.result_display.update("")
+    async def handle_search(self):
+        if not self.album_input.value or not self.artist_input.value:
+            self.result_display.update("Please enter both album and artist names.")
+            return
+
+        listened_at = datetime.now()
+        if self.dt_input.value:
+            listened_at = datetime.strptime(self.dt_input.value, config.DATETIME_FORMAT)
+
+        a = await self.lastfm.get_album(
+            title=self.album_input.value,
+            artist=self.artist_input.value,
+            with_tracks=True
+        )
+
+        if a and a.tracks:
+            self.tracks = a.tracks
+            current_listened_at = listened_at
+            tracks_list = ""
+            for t in reversed(self.tracks):
+                time_to_scrobble = current_listened_at - timedelta(milliseconds=t.duration)
+                t.time_to_scrobble = time_to_scrobble
+                tracks_list += f"{t.order}. {t.name} ({time_to_scrobble.strftime(config.DATETIME_FORMAT)})\n"
+                current_listened_at = time_to_scrobble
+            if tracks_list and not self.scrobble_button.is_mounted:
+                self.result_display.update(f"Album: {a.title}\nArtist: {a.artist_name}\nTracks:\n{tracks_list}")
+                await self.mount(self.scrobble_button)
+        else:
+            self.result_display.update("No results found")
             if self.scrobble_button.is_mounted:
                 await self.scrobble_button.remove()
-            self.tracks = []
 
+    async def reset_inputs(self):
+        self.album_input.value = ""
+        self.artist_input.value = ""
+        self.dt_input.value = ""
+        self.result_display.update("")
+        if self.scrobble_button.is_mounted:
+            await self.scrobble_button.remove()
+        self.tracks = []
+
+    async def on_button_pressed(self, event):
+        match event.button.id:
+            case "clear":
+                await self.reset_inputs()
+            case "search":
+                await self.handle_search()
+            case "scrobble-all":
+                await self.handle_batch_scrobble()
+                await self.reset_inputs()
 
 

@@ -24,7 +24,7 @@ class Album(BaseModel):
     tracks: Optional[list[Any]] = None
     tags: Optional[list[Any]] = None
     playcount: int = None
-    mbid: str = None
+    mbid: Optional[str] = None
     wiki: Optional[str] = None
     user_playcount: Optional[int] = None
     listener_count: Optional[int] = None
@@ -41,6 +41,8 @@ class Track(BaseModel):
     lastfm_updated_now_playing: bool = False
     clean_name: Optional[str] = None
     clean_album: Optional[str] = None
+    order: Optional[int] = None
+    time_to_scrobble: Optional[str] = None
 
     class Config:
         extra = "allow"
