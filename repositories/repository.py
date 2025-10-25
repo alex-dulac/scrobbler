@@ -230,6 +230,19 @@ class ScrobbleRepository:
         result = await self.db.execute(query)
         return result.all()
 
+    async def get_artist_counts_by_year(self, artist_name: str) -> Any:
+        query = (
+            select(
+                func.extract('year', Scrobble.scrobbled_at).label('year'),
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(Scrobble.artist_name == artist_name)
+            .group_by('year')
+            .order_by('year')
+        )
+        result = await self.db.execute(query)
+        return result.all()
+
 
 @asynccontextmanager
 async def get_scrobble_repository():

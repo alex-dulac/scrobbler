@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import Any
 
 from rich.console import RenderableType, Group
 from rich.progress import Progress, TextColumn, BarColumn
@@ -12,6 +13,7 @@ from core import config
 from library.session_scrobbles import SessionScrobbles
 from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
+from repositories.filters import ScrobbleFilter
 from repositories.repository import get_scrobble_repository
 from services.lastfm_service import LastFmService
 
@@ -67,8 +69,8 @@ class TuiIds(str, Enum):
 
 
 playback_controls = Container(
-    Button("Apple Music", id=TuiIds.APPLE_MUSIC, classes="active-button"),
-    Button("Spotify", id=TuiIds.SPOTIFY),
+    Button("Apple Music", id=TuiIds.APPLE_MUSIC.value, classes="active-button"),
+    Button("Spotify", id=TuiIds.SPOTIFY.value),
     Button("⏯ Play/Pause", id=TuiIds.PLAY_PAUSE),
     Button("⏮ Back", id=TuiIds.PREVIOUS_TRACK),
     Button("⏭ Skip", id=TuiIds.NEXT_TRACK),
@@ -86,6 +88,38 @@ view_controls = Container(
     classes="controls",
     id="view-controls"
 )
+
+async def get_scrobbles_by_year_chart(
+        scrobbles: list[LastFmTrack],
+        table_name: str,
+        years: range
+) -> tuple[Table, defaultdict[Any, int]]:
+    chart_table = Table(title=table_name, expand=True)
+    chart_table.add_column("Year", style="cyan", width=8)
+    chart_table.add_column("Count", style="white", width=8)
+    chart_table.add_column("Chart", style="green")
+
+    year_counts = defaultdict(int)
+    for scrobble in scrobbles:
+        year_counts[scrobble.scrobbled_at.year] += 1
+
+    # get max count for bar scaling
+    max_count = max(year_counts.values()) if year_counts else 1
+
+    for year in years:
+        count = year_counts.get(year, 0)
+        if count > 0:
+            bar_width = int((count / max_count) * 50)
+            bar = "█" * bar_width
+            chart_display = f"{bar} ({count})"
+        else:
+            chart_display = f"({count})"
+
+        chart_table.add_row(str(year), str(count), chart_display)
+
+    chart_table.add_section()
+
+    return chart_table, year_counts
 
 
 class SongInfoWidget(Static):
@@ -121,15 +155,8 @@ class BaseDbWidget(Static):
 class TrackHistoryWidget(Static):
     def __init__(self):
         super().__init__(id=TuiViews.TRACK_HISTORY, classes="content-container")
-        self.start_year: int = datetime.today().year
-        self.current_year: int = datetime.today().year
-        self.all_years = range(self.start_year, self.current_year + 1)
 
-    def set_years(self, start_year: int):
-        self.start_year = start_year
-        self.all_years = range(self.start_year, self.current_year + 1)
-
-    def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack]) -> None:
+    async def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack], years: range) -> None:
         if not current_song:
             self.update("No song selected")
             return
@@ -138,32 +165,13 @@ class TrackHistoryWidget(Static):
             self.update(f"No previous scrobbles found for: {current_song.display_name}")
             return
 
-        year_counts = defaultdict(int)
-        for scrobble in scrobbles:
-            year_counts[scrobble.scrobbled_at.year] += 1
-
-        chart_table = Table(title=f"Scrobbles by Year: {current_song.display_name}", expand=True)
-        chart_table.add_column("Year", style="cyan", width=8)
-        chart_table.add_column("Count", style="white", width=8)
-        chart_table.add_column("Chart", style="green")
-
-        # get max count for bar scaling
-        max_count = max(year_counts.values()) if year_counts else 1
-
-        for year in self.all_years:
-            count = year_counts.get(year, 0)
-            if count > 0:
-                bar_width = int((count / max_count) * 50)
-                bar = "█" * bar_width
-                chart_display = f"{bar} ({count})"
-            else:
-                chart_display = f"({count})"
-
-            chart_table.add_row(str(year), str(count), chart_display)
-
-        chart_table.add_section()
+        chart_table, year_counts = await get_scrobbles_by_year_chart(
+            scrobbles=scrobbles,
+            table_name=f"Scrobbles by Year for: {current_song.display_name}",
+            years=years
+        )
         total_scrobbles = sum(year_counts.values())
-        avg_per_year = total_scrobbles / len(self.all_years)
+        avg_per_year = total_scrobbles / len(years)
 
         summary_table = Table(title="Additional Stats", width=60)
         summary_table.add_column("Metric", style="dim")
@@ -202,7 +210,7 @@ class ArtistStatsWidget(BaseDbWidget):
             db_connected=db_connected,
         )
 
-    async def update_artist_stats(self, artist_name: Track) -> None:
+    async def update_artist_stats(self, artist_name: Track, years: range) -> None:
         if not self.db_connected:
             self.update("Database not connected")
             return
@@ -213,6 +221,10 @@ class ArtistStatsWidget(BaseDbWidget):
 
         async with get_scrobble_repository() as repo:
             top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
+            top_played_albums = await repo.get_top_albums_by_artist(artist_name.artist)
+            all_scrobbles_by_artist = await repo.get_scrobbles(ScrobbleFilter(
+                artist_name=artist_name.artist
+            ))
 
         if not top_played_tracks:
             self.update(f"No scrobbles found for artist: {artist_name.artist}")
@@ -236,8 +248,6 @@ class ArtistStatsWidget(BaseDbWidget):
             row_style = album_styles[album_name]
             tracks.add_row(str(i + 1), track_name, album_name, str(play_count), style=row_style)
 
-        top_played_albums = await repo.get_top_albums_by_artist(artist_name.artist)
-
         albums = Table(title=f"Top Played Albums for: {artist_name.artist}", expand=True)
         albums.add_column("#", style="dim", width=4)
         albums.add_column("Album", style="white", width=60)
@@ -247,7 +257,14 @@ class ArtistStatsWidget(BaseDbWidget):
             row_style = album_styles.get(album_name, "white")
             albums.add_row(str(i + 1), album_name, str(play_count), style=row_style)
 
-        self.update(Group(tracks, "", albums))
+        chart_table, year_counts = await get_scrobbles_by_year_chart(
+            scrobbles=all_scrobbles_by_artist,
+            table_name=f"Scrobbles by Year for: {artist_name.artist}",
+            years=years
+        )
+
+        combined = Group(chart_table, "", tracks, "", albums)
+        self.update(combined)
 
 
 class SessionInfoWidget(Static):

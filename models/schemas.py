@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel, HttpUrl
+from rich.text import Text
 
 from core import config
 
@@ -57,6 +58,15 @@ class Track(BaseModel):
         return f"`{self.clean_name}` by {self.artist} from `{self.clean_album}`"
 
     @property
+    def display_status(self) -> str:
+        if self.scrobbled:
+            return "✓ Scrobbled to Last.fm"
+        elif not self.playing:
+            return "⏸ Paused"
+        else:
+            return "▶ Playing"
+
+    @property
     def scrobble_threshold(self) -> int:
         return min(round(self.duration / 2), 120) if self.duration else 120
 
@@ -81,6 +91,22 @@ class Track(BaseModel):
     @property
     def time_remaining(self) -> float:
         return max(self.duration - self.time_played, 0)
+
+    def format_textual_song_info(self, is_pending: bool = False) -> Text:
+        text = Text()
+        text.append(f"{self.clean_name}\n", style="bold white")
+        text.append(f"by ", style="dim")
+        text.append(f"{self.artist}", style="italic cyan")
+        if self.album:
+            text.append(f" • ", style="dim")
+            text.append(f"{self.clean_album}", style="italic green")
+
+        if is_pending:
+            text.append(f"\n{"⏱ Pending scrobble (no internet)"}", style="orange")
+        elif self.display_status:
+            text.append(f"\n{self.display_status}", style="yellow" if "Scrobbled" in self.display_status else "blue")
+
+        return text
 
 
 class AppleMusicTrack(Track):
