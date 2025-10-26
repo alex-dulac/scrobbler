@@ -18,6 +18,7 @@ from models.db import (
     SimilarArtist,
     SimilarTrack
 )
+from models.schemas import LastFmTrack
 from repositories.filters import ScrobbleFilter, build_query
 
 
@@ -34,6 +35,16 @@ class ScrobbleRepository:
     async def add_and_commit(self, objs: list[Any]) -> Any:
         self.db.add_all(objs)
         return await self.db.commit()
+
+    async def add_lastfm_track(self, lastfm_track: LastFmTrack):
+        db_scrobble = Scrobble(
+            artist_name=lastfm_track.artist,
+            album_name=lastfm_track.album,
+            track_name=lastfm_track.name,
+            scrobbled_at=lastfm_track.scrobbled_at
+        )
+        self.db.add(db_scrobble)
+        await self.db.commit()
 
     async def get_scrobbles(self, f: ScrobbleFilter = None) -> Any:
         query = await build_query(f)

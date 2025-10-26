@@ -183,6 +183,9 @@ class ScrobblerApp(App):
                 self.notify("Failed to control playback. Spotify Premium required.")
 
     async def handle_scrobble(self):
+        if self.state.is_scrobbling:
+            return
+
         self.state.is_scrobbling = True
         scrobbled_track = await self.lastfm.scrobble(self.state.current_song)
         if scrobbled_track:
@@ -191,14 +194,9 @@ class ScrobblerApp(App):
             self.state.current_song.scrobbled = True
             self.get_session_info().update_session_info()
             if self.db_connected:
-                scrobble = Scrobble(
-                    artist_name=scrobbled_track.artist,
-                    album_name=scrobbled_track.album,
-                    track_name=scrobbled_track.name,
-                    scrobbled_at=scrobbled_track.scrobbled_at
-                )
                 async with get_scrobble_repository() as repo:
-                    await repo.add_and_commit([scrobble])
+                    await repo.add_lastfm_track(scrobbled_track)
+                self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
         else:
             self.state.session.add_pending(self.state.current_song)
             self.state.current_song.format_textual_song_info()
@@ -231,9 +229,9 @@ class ScrobblerApp(App):
         if compare.update_song_playing_status:
             self.state.current_song.playing = poll.playing
 
-        if self.state.current_song.playing:
+        if self.state.current_song.playing and not self.state.current_song.scrobbled:
             self.state.current_song.time_played += 1
-            if self.state.current_song.is_ready_to_be_scrobbled and not self.state.is_scrobbling:
+            if self.state.current_song.is_ready_to_be_scrobbled:
                 await self.handle_scrobble()
 
         self.update_song_info(self.state.current_song.format_textual_song_info())
