@@ -1,4 +1,5 @@
 import spotipy
+from httpcore import ReadTimeout
 from loguru import logger
 from spotipy.oauth2 import SpotifyOAuth
 
@@ -45,7 +46,11 @@ class SpotifyService:
     async def poll_spotify(self) -> SpotifyTrack | None:
         try:
             result = self.spotify.current_user_playing_track()
-        except spotipy.SpotifyException:
+        except spotipy.SpotifyException as e:
+            logger.warning(f'Poll Spotify failed: {e}')
+            return None
+        except ReadTimeout:
+            logger.warning('Poll Spotify timed out.')
             return None
 
         track_data = result['item'] if result else None
