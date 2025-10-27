@@ -43,9 +43,12 @@ class SpotifyService:
 
 
     async def poll_spotify(self) -> SpotifyTrack | None:
-        result = self.spotify.current_user_playing_track()
-        track_data = result['item'] if result else None
+        try:
+            result = self.spotify.current_user_playing_track()
+        except spotipy.SpotifyException:
+            return None
 
+        track_data = result['item'] if result else None
         if track_data:
             clean_name = await clean_up_title(track_data['name'])
             clean_album = await clean_up_title(track_data['album']['name'])
