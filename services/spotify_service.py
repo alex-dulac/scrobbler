@@ -101,8 +101,3 @@ class SpotifyService:
         )
         return artist
 
-
-spotify = SpotifyService()
-
-async def get_spotify_service() -> SpotifyService:
-    return spotify

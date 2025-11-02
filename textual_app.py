@@ -8,14 +8,15 @@ from textual import work
 
 from core.database import session_manager
 from library.comparison import Comparison
+from library.dependencies import get_lastfm_service, get_spotify_service
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
 from library.textual_widgets import get_scrobble_repository
 from models.db import Scrobble
 from models.schemas import Track
 from services.apple_music_service import poll_apple_music, playback_control
-from services.spotify_service import SpotifyService, get_spotify_service
-from services.lastfm_service import LastFmService, get_lastfm_service
+from services.spotify_service import SpotifyService
+from services.lastfm_service import LastFmService
 import library.textual_widgets as widgets
 
 

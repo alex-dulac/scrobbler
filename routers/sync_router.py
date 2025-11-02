@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from services.sync_service import SyncService, get_sync_service
+from library.dependencies import get_sync_service
+from services.sync_service import SyncService
 
 sync_router = APIRouter()
 

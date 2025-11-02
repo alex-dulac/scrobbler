@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends
 from loguru import logger
 
 from library.state import get_app_state
-from services.lastfm_service import get_lastfm_service, LastFmService
+from library.dependencies import get_lastfm_service
+from services.lastfm_service import LastFmService
 
 scrobble_router = APIRouter()
 

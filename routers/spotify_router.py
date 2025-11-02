@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from services.spotify_service import SpotifyService, get_spotify_service
+from library.dependencies import get_spotify_service
+from services.spotify_service import SpotifyService
 
 spotify_router = APIRouter()
 

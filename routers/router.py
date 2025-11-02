@@ -4,14 +4,15 @@ from loguru import logger
 from core import config
 from core.security import token_auth
 from library.comparison import Comparison
+from library.dependencies import get_lastfm_service, get_spotify_service
 from routers.spotify_router import spotify_router
 from routers.scrobble_router import scrobble_router
 from library.state import get_app_state
 from routers.sync_router import sync_router
 from routers.user_router import user_router
 from services.apple_music_service import poll_apple_music, get_current_track_artwork_data
-from services.lastfm_service import get_lastfm_service, LastFmService
-from services.spotify_service import get_spotify_service, SpotifyService
+from services.lastfm_service import LastFmService
+from services.spotify_service import SpotifyService
 
 router = APIRouter(dependencies=[
     Depends(get_app_state),

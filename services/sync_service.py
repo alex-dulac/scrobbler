@@ -12,7 +12,6 @@ from core.database import get_db
 from repositories.filters import ScrobbleFilter
 from repositories.repository import ScrobbleRepository
 from library.utils import lastfm_friendly, clean_up_title
-from services.lastfm_service import LastFmService
 
 
 class SyncService:
@@ -31,6 +30,9 @@ class SyncService:
             time_to: str = None,
             clean: bool = True
     ) -> dict[str, int]:
+        from library.dependencies import get_lastfm_service
+
+        lastfm_service = await get_lastfm_service()
         fetched = 0
         saved = 0
         time_from = int(datetime.strptime(time_from, "%Y-%m-%d").timestamp()) if time_from else None
@@ -41,7 +43,7 @@ class SyncService:
                 logger.info("Reached the specified time_from limit. Stopping sync.")
                 break
 
-            tracks = self.lastfm_service.user.get_recent_tracks(
+            tracks = lastfm_service.user.get_recent_tracks(
                 limit=200, # max allowed by the API
                 time_to=time_to
             )
@@ -150,9 +152,12 @@ class SyncService:
         return {"synced_tracks": len(tracks)}
 
     async def sync_artist(self, artist_name: str) -> None:
+        from library.dependencies import get_lastfm_service
+
+        lastfm_service = await get_lastfm_service()
         to_db = []
         logger.info(f"Syncing artist: {artist_name}")
-        lastfm_artist = self.lastfm_service.network.get_artist(
+        lastfm_artist = lastfm_service.network.get_artist(
             lastfm_friendly(artist_name)
         )
 
@@ -259,6 +264,8 @@ class SyncService:
         logger.info(f"Artist data sync complete for {artist_name}.")
 
     async def sync_album(self, album: Row[tuple[str, str]]) -> None:
+        from library.dependencies import get_lastfm_service
+
         to_db = []
         logger.info(f"Syncing album: {album}")
         title = album[0]
@@ -268,7 +275,8 @@ class SyncService:
             logger.warning(f"Skipping album with missing artist or title: {album}")
             return
 
-        album_data = await self.lastfm_service.get_album(
+        lastfm_service = await get_lastfm_service()
+        album_data = await lastfm_service.get_album(
             artist=artist,
             title=title,
             with_tracks=True,
@@ -332,10 +340,13 @@ class SyncService:
         logger.info(f"Album data sync complete for {title} by {artist}.")
 
     async def sync_track(self, track: Row[tuple[str, str]]) -> None:
+        from library.dependencies import get_lastfm_service
+
+        lastfm_service = await get_lastfm_service()
         to_db = []
         title = track[0]
         artist = track[1]
-        track_data = await self.lastfm_service.get_track(track_name=title, artist_name=artist)
+        track_data = await lastfm_service.get_track(track_name=title, artist_name=artist)
 
         db_track: tables.Track = await self.scrobble_repo.get_track(track_name=title, artist_name=artist)
         if db_track:
