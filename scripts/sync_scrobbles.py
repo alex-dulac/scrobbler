@@ -19,18 +19,15 @@ from services.sync_service import SyncService
 
 async def main(time_from: str = None, time_to: str = None):
     await session_manager.init_db()
-    async with session_manager.session_factory() as db:
-        try:
-            sync_service = SyncService(db=db)
-            result = await sync_service.sync_scrobbles(
-                time_from=time_from,
-                time_to=time_to,
-            )
-            logger.info(f"Sync complete. {result["new_scrobbles"]} new scrobbles added.")
 
-        finally:
-            await db.close()
-            await session_manager.close_db()
+    sync_service = SyncService()
+    result = await sync_service.sync_scrobbles(
+        time_from=time_from,
+        time_to=time_to,
+    )
+    logger.info(f"Sync complete. {result["new_scrobbles"]} new scrobbles added.")
+
+    await session_manager.close_db()
 
 
 if __name__ == "__main__":

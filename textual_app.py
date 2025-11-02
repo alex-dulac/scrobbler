@@ -11,9 +11,8 @@ from library.comparison import Comparison
 from library.dependencies import get_lastfm_service, get_spotify_service
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
-from library.textual_widgets import get_scrobble_repository
-from models.db import Scrobble
 from models.schemas import Track
+from repositories.scrobble_repo import ScrobbleRepository
 from services.apple_music_service import poll_apple_music, playback_control
 from services.spotify_service import SpotifyService
 from services.lastfm_service import LastFmService
@@ -195,8 +194,8 @@ class ScrobblerApp(App):
             self.state.current_song.scrobbled = True
             self.get_session_info().update_session_info()
             if self.db_connected:
-                async with get_scrobble_repository() as repo:
-                    await repo.add_lastfm_track(scrobbled_track)
+                repo = ScrobbleRepository()
+                await repo.add_lastfm_track(scrobbled_track)
                 self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
         else:
             self.state.session.add_pending(self.state.current_song)

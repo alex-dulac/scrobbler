@@ -10,11 +10,12 @@ from textual.containers import Container
 from textual.widgets import Static, Button, Input
 
 from core import config
+from core.database import get_db
 from library.session_scrobbles import SessionScrobbles
 from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.filters import ScrobbleFilter
-from repositories.repository import get_scrobble_repository
+from repositories.scrobble_repo import ScrobbleRepository
 from services.lastfm_service import LastFmService
 
 css = """
@@ -219,7 +220,8 @@ class ArtistStatsWidget(BaseDbWidget):
             self.update("No song selected")
             return
 
-        async with get_scrobble_repository() as repo:
+        async with get_db() as session:
+            repo = ScrobbleRepository(session)
             top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
             top_played_albums = await repo.get_top_albums_by_artist(artist_name.artist)
             all_scrobbles_by_artist = await repo.get_scrobbles(ScrobbleFilter(
@@ -371,9 +373,9 @@ class ManualScrobbleWidget(BaseDbWidget):
             if not self.db_connected:
                 self.update("Database not connected")
                 return
-            async with get_scrobble_repository() as repo:
-                await repo.add_and_commit(to_db)
-                self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
+            repo = ScrobbleRepository()
+            await repo.add_and_commit(to_db)
+            self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
 
     async def handle_search(self):
         if not self.album_input.value or not self.artist_input.value:

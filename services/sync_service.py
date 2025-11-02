@@ -1,28 +1,23 @@
 import asyncio
-from contextlib import asynccontextmanager
 from datetime import datetime
 
 from loguru import logger
 from pylast import TopItem
 from sqlalchemy import Row
-from sqlalchemy.ext.asyncio import AsyncSession
 
 import models.db as tables
-from core.database import get_db
 from repositories.filters import ScrobbleFilter
-from repositories.repository import ScrobbleRepository
+from repositories.scrobble_repo import ScrobbleRepository
 from library.utils import lastfm_friendly, clean_up_title
 
 
 class SyncService:
     """
     Service to sync data from Last.fm API into the database.
-    Db must be provided when triggered from outside an async context manager.
     This has the potential to make a lot of API calls, so be mindful of usage.
     """
-    def __init__(self, db: AsyncSession):
-        self.lastfm_service = LastFmService()
-        self.scrobble_repo = ScrobbleRepository(db)
+    def __init__(self):
+        self.scrobble_repo = ScrobbleRepository()
 
     async def sync_scrobbles(
             self,
@@ -37,6 +32,8 @@ class SyncService:
         saved = 0
         time_from = int(datetime.strptime(time_from, "%Y-%m-%d").timestamp()) if time_from else None
         time_to = int(datetime.strptime(time_to, "%Y-%m-%d").timestamp()) if time_to else None
+        if not time_to:
+            time_to = int(datetime.now().timestamp())
 
         while True:
             if time_from and time_to and time_from >= time_to:
@@ -399,8 +396,3 @@ class SyncService:
         await self.scrobble_repo.add_and_commit(to_db)
         logger.info(f"Track data sync complete for {title} by {artist}.")
 
-
-@asynccontextmanager
-async def get_sync_service():
-    async with get_db() as session:
-        yield SyncService(db=session)

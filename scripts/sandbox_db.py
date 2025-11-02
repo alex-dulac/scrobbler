@@ -7,7 +7,7 @@ import asyncio
 
 from core.database import session_manager
 from repositories.filters import ScrobbleFilter
-from repositories.repository import ScrobbleRepository
+from repositories.scrobble_repo import ScrobbleRepository
 
 
 async def main():
