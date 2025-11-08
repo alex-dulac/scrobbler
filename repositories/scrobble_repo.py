@@ -18,7 +18,7 @@ from models.db import (
 )
 from models.schemas import LastFmTrack
 from repositories.base import BaseRepository
-from repositories.filters import ScrobbleFilter, build_query
+from repositories.filters import ScrobbleFilter, build_query, to_lower
 
 
 class ScrobbleRepository(BaseRepository):
@@ -228,12 +228,12 @@ class ScrobbleRepository(BaseRepository):
         async with self._get_session() as session:
             query = (
                 select(
-                    Scrobble.track_name,
-                    Scrobble.album_name,
+                    func.max(Scrobble.track_name).label('track_name'),
+                    func.max(Scrobble.album_name).label('album_name'),
                     func.count(Scrobble.id).label('play_count')
                 )
-                .where(Scrobble.artist_name == artist_name)
-                .group_by(Scrobble.track_name, Scrobble.album_name)
+                .where(to_lower(Scrobble.artist_name) == to_lower(artist_name))
+                .group_by(to_lower(Scrobble.track_name), to_lower(Scrobble.album_name))
                 .order_by(desc('play_count'))
                 .limit(limit)
             )
@@ -244,11 +244,11 @@ class ScrobbleRepository(BaseRepository):
         async with self._get_session() as session:
             query = (
                 select(
-                    Scrobble.album_name,
+                    func.max(Scrobble.album_name).label('album_name'),
                     func.count(Scrobble.id).label('play_count')
                 )
-                .where(Scrobble.artist_name == artist_name)
-                .group_by(Scrobble.album_name)
+                .where(to_lower(Scrobble.artist_name) == to_lower(artist_name))
+                .group_by(to_lower(Scrobble.album_name))
                 .order_by(desc('play_count'))
                 .limit(limit)
             )

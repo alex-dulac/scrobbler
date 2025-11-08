@@ -20,7 +20,7 @@ class SessionScrobbles(BaseModel):
     def add_scrobble(self, track: LastFmTrack) -> None:
         self.scrobbles.append(track)
         self.count += 1
-        logger.info(f"Scrobble Count: {self.count}")
+        # logger.info(f"Scrobble Count: {self.count}")
 
     def add_pending(self, track: Track) -> None:
         if track not in self.pending:

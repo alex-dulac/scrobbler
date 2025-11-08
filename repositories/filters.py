@@ -1,9 +1,13 @@
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, func
 
 from models.db import Scrobble
+
+
+def to_lower(value: str) -> str:
+    return func.lower(value)
 
 
 class ScrobbleFilter(BaseModel):
@@ -22,13 +26,13 @@ async def build_query(f: ScrobbleFilter) -> Select[tuple[Scrobble]]:
         return query
 
     if f.track_name:
-        query = query.where(Scrobble.track_name == f.track_name)
+        query = query.where(to_lower(Scrobble.track_name) == to_lower(f.track_name))
 
     if f.artist_name:
-        query = query.where(Scrobble.artist_name == f.artist_name)
+        query = query.where(to_lower(Scrobble.artist_name) == to_lower(f.artist_name))
 
     if f.album_name:
-        query = query.where(Scrobble.album_name == f.album_name)
+        query = query.where(to_lower(Scrobble.album_name) == to_lower(f.album_name))
 
     if f.scrobbled_at:
         query = query.where(Scrobble.scrobbled_at == f.scrobbled_at)

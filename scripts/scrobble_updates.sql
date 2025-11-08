@@ -1,12 +1,8 @@
 /**
   A running log of sql statements to clean up various album names,
   ensuring data integrity when viewed in the TUI app.
+  Yes, this is a bit obsessive.
  */
-
-update scrobbles
-set album_name = '...And Out Come the Wolves'
-where artist_name = 'Rancid'
-and album_name = '...And Out Come The Wolves';
 
 update scrobbles
 set album_name = 'Let''s Go'
@@ -33,3 +29,13 @@ set album_name = 'All Killer, No Filler'
 where artist_name = 'Sum 41'
 and album_name = 'All Killer No Filler';
 
+-- thanks wolfgang for changing the name of your band
+update scrobbles
+set artist_name = 'Mammoth'
+where artist_name = 'Mammoth WVH';
+
+-- must've downloaded a UK release or something
+update scrobbles
+set album_name = 'Your Favorite Weapon'
+where artist_name = 'Brand New'
+and album_name = 'Your Favourite Weapon';

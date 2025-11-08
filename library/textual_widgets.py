@@ -109,12 +109,11 @@ async def get_scrobbles_by_year_chart(
 
     for year in years:
         count = year_counts.get(year, 0)
+        chart_display = "|"
         if count > 0:
-            bar_width = int((count / max_count) * 50)
+            bar_width = int((count / max_count) * 100)
             bar = "█" * bar_width
             chart_display = f"{bar} ({count})"
-        else:
-            chart_display = f"({count})"
 
         chart_table.add_row(str(year), str(count), chart_display)
 
@@ -385,6 +384,10 @@ class ManualScrobbleWidget(BaseDbWidget):
         listened_at = datetime.now()
         if self.dt_input.value:
             listened_at = datetime.strptime(self.dt_input.value, config.DATETIME_FORMAT)
+
+        if listened_at > datetime.now():
+            self.result_display.update("The 'listened at' datetime cannot be in the future.")
+            return
 
         a = await self.lastfm.get_album(
             title=self.album_input.value,
