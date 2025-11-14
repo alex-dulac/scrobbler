@@ -220,8 +220,7 @@ class ScrobblerApp(App):
         if compare.song_has_changed:
             self.state.current_song = poll
             self.state.current_song.time_played = 0
-            scrobbles = await self.lastfm.current_track_user_scrobbles(self.state.current_song)
-            await self.get_track_history().update_chart(self.state.current_song, scrobbles, self.years)
+            await self.get_track_history().update_chart(self.state.current_song, self.years)
             await self.get_artist_stats().update_artist_stats(self.state.current_song, self.years)
             if compare.update_lastfm_now_playing:
                 self.state.current_song.lastfm_updated_now_playing = await self.lastfm.update_now_playing(self.state.current_song)

@@ -10,6 +10,10 @@ def to_lower(value: str) -> str:
     return func.lower(value)
 
 
+def like_lower(column, value: str):
+    return func.lower(column).like(func.lower(value))
+
+
 class ScrobbleFilter(BaseModel):
     track_name: str | None = None
     artist_name: str | None = None

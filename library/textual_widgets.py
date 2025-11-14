@@ -156,10 +156,17 @@ class TrackHistoryWidget(Static):
     def __init__(self):
         super().__init__(id=TuiViews.TRACK_HISTORY, classes="content-container")
 
-    async def update_chart(self, current_song: Track, scrobbles: list[LastFmTrack], years: range) -> None:
+    async def update_chart(self, current_song: Track, years: range) -> None:
         if not current_song:
             self.update("No song selected")
             return
+
+        async with get_db() as session:
+            repo = ScrobbleRepository(session)
+            scrobbles = await repo.get_scrobbles_like_track(
+                track_name=current_song.name,
+                artist_name=current_song.artist
+            )
 
         if not scrobbles:
             self.update(f"No previous scrobbles found for: {current_song.display_name}")
@@ -210,28 +217,29 @@ class ArtistStatsWidget(BaseDbWidget):
             db_connected=db_connected,
         )
 
-    async def update_artist_stats(self, artist_name: Track, years: range) -> None:
+    async def update_artist_stats(self, current_song: Track, years: range) -> None:
         if not self.db_connected:
             self.update("Database not connected")
             return
 
-        if not artist_name:
+        if not current_song:
             self.update("No song selected")
             return
 
+        artist = current_song.artist
+
         async with get_db() as session:
             repo = ScrobbleRepository(session)
-            top_played_tracks = await repo.get_top_tracks_by_artist(artist_name.artist, limit=30)
-            top_played_albums = await repo.get_top_albums_by_artist(artist_name.artist)
-            all_scrobbles_by_artist = await repo.get_scrobbles(ScrobbleFilter(
-                artist_name=artist_name.artist
-            ))
+            top_played_tracks = await repo.get_top_tracks_by_artist(artist, limit=30)
+            top_played_albums = await repo.get_top_albums_by_artist(artist)
+            f = ScrobbleFilter(artist_name=artist)
+            all_scrobbles_by_artist = await repo.get_scrobbles(f)
 
         if not top_played_tracks:
-            self.update(f"No scrobbles found for artist: {artist_name.artist}")
+            self.update(f"No scrobbles found for artist: {artist}")
             return
 
-        tracks = Table(title=f"Top Played Tracks for: {artist_name.artist}", expand=True)
+        tracks = Table(title=f"Top Played Tracks for: {artist}", expand=True)
         tracks.add_column("#", style="dim", width=4)
         tracks.add_column("Track", style="white", width=40)
         tracks.add_column("Album", style="white", width=40)
@@ -249,7 +257,7 @@ class ArtistStatsWidget(BaseDbWidget):
             row_style = album_styles[album_name]
             tracks.add_row(str(i + 1), track_name, album_name, str(play_count), style=row_style)
 
-        albums = Table(title=f"Top Played Albums for: {artist_name.artist}", expand=True)
+        albums = Table(title=f"Top Played Albums for: {artist}", expand=True)
         albums.add_column("#", style="dim", width=4)
         albums.add_column("Album", style="white", width=60)
         albums.add_column("Play Count", style="cyan", width=12)
@@ -260,7 +268,7 @@ class ArtistStatsWidget(BaseDbWidget):
 
         chart_table, year_counts = await get_scrobbles_by_year_chart(
             scrobbles=all_scrobbles_by_artist,
-            table_name=f"Scrobbles by Year for: {artist_name.artist}",
+            table_name=f"Scrobbles by Year for: {artist}",
             years=years
         )
 

@@ -18,7 +18,7 @@ from models.db import (
 )
 from models.schemas import LastFmTrack
 from repositories.base import BaseRepository
-from repositories.filters import ScrobbleFilter, build_query, to_lower
+from repositories.filters import ScrobbleFilter, build_query, to_lower, like_lower
 
 
 class ScrobbleRepository(BaseRepository):
@@ -268,5 +268,18 @@ class ScrobbleRepository(BaseRepository):
             )
             result = await session.execute(query)
             return result.all()
+
+    async def get_scrobbles_like_track(self, track_name: str, artist_name: str) -> Any:
+        # If we passed in "Song Name", ideally we would get results like
+        # "Song Name", "Song Name (Remastered)", "Song Name - Single Version", etc.
+        async with self._get_session() as session:
+            query = (
+                select(Scrobble)
+                .where(like_lower(Scrobble.track_name, f"%{track_name}%"))
+                .where(to_lower(Scrobble.artist_name) == to_lower(artist_name))
+                .order_by(Scrobble.scrobbled_at)
+            )
+            result = await session.execute(query)
+            return result.scalars().all()
 
 
