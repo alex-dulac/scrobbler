@@ -230,6 +230,7 @@ class LastFmService:
 
         try:
             album_title = album.get_title(True)
+            mbid = album.get_mbid() or None
         except pylast.WSError as e:
             logger.error(f"Failed to get album: {title} by {artist}: {e}")
             return None
@@ -268,7 +269,7 @@ class LastFmService:
             url=album.get_url(),
             tracks=tracks,
             tags=tags,
-            mbid=album.get_mbid(),
+            mbid=mbid,
             playcount=int(album.get_playcount()),
             user_playcount=int(album.get_userplaycount()),
             listener_count=int(album.get_listener_count()),

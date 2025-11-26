@@ -195,7 +195,7 @@ class ScrobblerApp(App):
             self.get_session_info().update_session_info()
             if self.db_connected:
                 repo = ScrobbleRepository()
-                await repo.add_lastfm_track(scrobbled_track)
+                await repo.add_scrobble(scrobbled_track)
                 self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
         else:
             self.state.session.add_pending(self.state.current_song)

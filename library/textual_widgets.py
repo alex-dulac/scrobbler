@@ -164,7 +164,7 @@ class TrackHistoryWidget(Static):
         async with get_db() as session:
             repo = ScrobbleRepository(session)
             scrobbles = await repo.get_scrobbles_like_track(
-                track_name=current_song.name,
+                track_name=current_song.clean_name,
                 artist_name=current_song.artist
             )
 
