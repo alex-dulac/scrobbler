@@ -45,8 +45,12 @@ class BaseRepository:
             await session.flush()
             return objs
 
-    async def add_and_commit(self, objs: list[Any]) -> None:
+    async def add_and_commit(self, objs: list[Any] | Any) -> None:
         """Add objects and commit immediately."""
+        if not isinstance(objs, list):
+            # Wrap single object in a list
+            objs = [objs]
+
         async with self._get_session() as session:
             session.add_all(objs)
             await session.commit()
