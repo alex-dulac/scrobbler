@@ -43,6 +43,7 @@ class ScrobblerApp(App):
         yield widgets.ArtistStatsWidget()
         yield widgets.SessionInfoWidget(self.state.session)
         yield widgets.ManualScrobbleWidget()
+        yield widgets.LastfmUserWidget()
         yield Footer()
 
     def get_track_history(self) -> widgets.TrackHistoryWidget:
@@ -56,6 +57,9 @@ class ScrobblerApp(App):
 
     def get_manual_scrobble(self) -> widgets.ManualScrobbleWidget:
         return self.query_one(widgets.ManualScrobbleWidget)
+
+    def get_lastfm_user_info(self) -> widgets.LastfmUserWidget:
+        return self.query_one(widgets.LastfmUserWidget)
 
     def update_progress_bar(self) -> None:
         value = 0.0 if not self.state.current_song else self.state.current_song.scrobble_progress_value
@@ -82,6 +86,8 @@ class ScrobblerApp(App):
         self.get_artist_stats().update(self.WAITING)
         self.years = range(self.state.user.registered.year, datetime.today().year + 1)
         self.get_manual_scrobble().lastfm = self.lastfm
+        self.get_lastfm_user_info().lastfm_service = self.lastfm
+        self.get_lastfm_user_info().refresh_data()
 
         self.set_interval(1, self.update_display) # primary app functionality
         self.update_progress_bar()
@@ -92,8 +98,9 @@ class ScrobblerApp(App):
         artist_stats = self.get_artist_stats()
         session = self.get_session_info()
         manual_scrobble = self.get_manual_scrobble()
+        lastfm_user = self.get_lastfm_user_info()
 
-        views = [history_chart, artist_stats, session, manual_scrobble]
+        views = [history_chart, artist_stats, session, manual_scrobble, lastfm_user]
         for view in views:
             view.display = False
 
@@ -106,6 +113,8 @@ class ScrobblerApp(App):
                 session.display = True
             case widgets.TuiViews.MANUAL_SCROBBLE:
                 manual_scrobble.display = True
+            case widgets.TuiViews.LASTFM_USER:
+                lastfm_user.display = True
 
     @work
     async def action_quit(self) -> None:
@@ -166,6 +175,8 @@ class ScrobblerApp(App):
                 if not check_db():
                     return
                 handle_view_change(widgets.TuiViews.MANUAL_SCROBBLE)
+            case widgets.TuiIds.SHOW_LASTFM_USER:
+                handle_view_change(widgets.TuiViews.LASTFM_USER)
             case widgets.TuiIds.PLAY_PAUSE:
                 self.playback_control(PlaybackAction.PAUSE)
             case widgets.TuiIds.NEXT_TRACK:
@@ -202,6 +213,7 @@ class ScrobblerApp(App):
             self.state.current_song.format_textual_song_info()
             self.update_song_info(self.state.current_song.format_textual_song_info(is_pending=True))
         self.state.is_scrobbling = False
+        self.get_lastfm_user_info().refresh_data()
 
     @work
     async def update_display(self) -> None:

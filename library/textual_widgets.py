@@ -4,8 +4,10 @@ from enum import Enum
 from typing import Any
 
 from rich.console import RenderableType, Group
+from rich.panel import Panel
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
+from textual import work
 from textual.containers import Container
 from textual.widgets import Static, Button, Input
 
@@ -54,6 +56,7 @@ class TuiViews(str, Enum):
     ARTIST_STATS = "artist-stats"
     SESSION = "session-info"
     MANUAL_SCROBBLE = "manual-scrobble"
+    LASTFM_USER = "lastfm-user"
 
 
 class TuiIds(str, Enum):
@@ -67,6 +70,7 @@ class TuiIds(str, Enum):
     SHOW_ARTIST_STATS = "show-artist-stats"
     SHOW_SESSION = "show-session"
     SHOW_MANUAL_SCROBBLE = "show-manual-scrobble"
+    SHOW_LASTFM_USER = "show-lastfm-user"
 
 
 playback_controls = Container(
@@ -86,6 +90,7 @@ view_controls = Container(
     Button("Artist Stats", id=TuiIds.SHOW_ARTIST_STATS),
     Button("Session", id=TuiIds.SHOW_SESSION),
     Button("Manual Scrobble", id=TuiIds.SHOW_MANUAL_SCROBBLE),
+    Button("Last.fm User", id=TuiIds.SHOW_LASTFM_USER),
     classes="controls",
     id="view-controls"
 )
@@ -440,3 +445,62 @@ class ManualScrobbleWidget(BaseDbWidget):
                 await self.reset_inputs()
 
 
+class LastfmUserWidget(Static):
+    def __init__(self):
+        super().__init__()
+        self.lastfm_service: LastFmService | None = None
+        self.update("[cyan]Loading Last.fm user data...[/cyan]")
+
+    @work
+    async def refresh_data(self):
+        if not self.lastfm_service:
+            self.update("Last.fm service not initialized")
+            return
+
+        self.update("[cyan]Loading Last.fm user data...[/cyan]")
+
+        try:
+            user_info = await self.lastfm_service.get_lastfm_user()
+        except Exception as e:
+            self.update(Panel(f"[red]Error loading user info: {str(e)}[/red]", title="Error"))
+            return
+
+        user_table = Table(title="Last.fm User Profile", show_header=False, box=None, width=100)
+        user_table.add_column("Field", style="cyan", width=20)
+        user_table.add_column("Value", style="white")
+
+        user_table.add_row("Username", user_info.name)
+        if user_info.realname:
+            user_table.add_row("Real Name", user_info.realname)
+        user_table.add_row("Country", user_info.country)
+        user_table.add_row("Total Scrobbles", user_info.playcount)
+        user_table.add_row("Tracks", user_info.track_count)
+        user_table.add_row("Albums", user_info.album_count)
+        user_table.add_row("Artists", user_info.artist_count)
+        if user_info.registered:
+            user_table.add_row("Member Since", user_info.registered.strftime("%B %d, %Y"))
+        user_table.add_row("Subscriber", "Yes" if user_info.subscriber == "1" else "No")
+        user_table.add_row("Profile URL", str(user_info.url))
+
+        try:
+            recent_tracks = await self.lastfm_service.get_user_recent_tracks()
+        except Exception as e:
+            self.update(user_table)  # Show user info even if tracks fail
+            return
+
+        tracks_table = Table(title="Recent Scrobbles", show_header=True, box=None, expand=True)
+        tracks_table.add_column("Track", style="green", width=30)
+        tracks_table.add_column("Artist", style="yellow", width=25)
+        tracks_table.add_column("Album", style="magenta", width=25)
+        tracks_table.add_column("Time", style="cyan", width=20)
+
+        for t in recent_tracks:
+            tracks_table.add_row(
+                t.name,
+                t.artist,
+                t.album,
+                t.scrobbled_at.strftime(config.DATETIME_FORMAT)
+            )
+
+        combined_display = Group(user_table, "", tracks_table)
+        self.update(combined_display)

@@ -32,7 +32,7 @@ async def user_spotify(spotify: SpotifyService = Depends(get_spotify_service)):
 
 @user_router.get("/user/recent-tracks/")
 async def recent_tracks(lastfm: LastFmService = Depends(get_lastfm_service)):
-    return {"recent_tracks": await lastfm.get_user_recent_tracks()}
+    return {"recent_tracks": await lastfm.get_user_recent_tracks_with_album_data()}
 
 
 @user_router.get("/user/loved-tracks/")
