@@ -101,24 +101,28 @@ class LastFmService:
         playcount = format(playcount, ',')
         return playcount
 
-    async def get_user_recent_tracks(self) -> list[tuple[LastFmTrack, Album | None]]:
+    async def get_user_recent_tracks(self) -> list[LastFmTrack]:
         recent_tracks = self.user.get_recent_tracks(limit=20)
         tracks = []
         for track in recent_tracks:
             scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
             album_name = track.album
             artist_name = track.track.artist.name
-
             t = LastFmTrack(
                 name=track.track.title,
                 artist=artist_name,
                 album=album_name,
-                scrobbled_at=scrobbled_at.strftime(config.DATETIME_FORMAT)
+                scrobbled_at=scrobbled_at
             )
-            a = await self.get_album(album_name, artist_name)
+            tracks.append(t)
+        return tracks
 
+    async def get_user_recent_tracks_with_album_data(self) -> list[tuple[LastFmTrack, Album | None]]:
+        recent_tracks = await self.get_user_recent_tracks()
+        tracks = []
+        for t in recent_tracks:
+            a = await self.get_album(t.album, t.artist)
             tracks.append([t, a])
-
         return tracks
 
     async def get_user_loved_tracks(self) -> list[LastFmTrack]:
