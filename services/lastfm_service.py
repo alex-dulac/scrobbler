@@ -2,6 +2,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+import httpx
 import pylast
 import requests
 from loguru import logger
@@ -17,19 +18,15 @@ LASTFM_USERNAME = config.LASTFM_USERNAME
 LASTFM_PASSWORD_HASH = pylast.md5(config.LASTFM_PASSWORD)
 
 
-# https://www.last.fm/api/show/user.getInfo
-# Manual API call
-def get_lastfm_account_details() -> LastFmUser:
-    params = {
-        'method': 'user.getInfo',
-        'user': LASTFM_USERNAME,
-        'api_key': LASTFM_API_KEY,
-        'format': 'json'
-    }
+user_params = {
+    'method': 'user.getInfo',
+    'user': LASTFM_USERNAME,
+    'api_key': LASTFM_API_KEY,
+    'format': 'json'
+}
 
-    response = requests.get(LASTFM_API_URL, params=params)
-    user_info = response.json()['user']
 
+def format_user_response(user_info: dict) -> LastFmUser:
     registered_at = None
     if 'unixtime' in user_info['registered']:
         registered_at = datetime.fromtimestamp(int(user_info['registered']['unixtime']))
@@ -53,6 +50,37 @@ def get_lastfm_account_details() -> LastFmUser:
         track_count=track_count,
         url=user_info['url']
     )
+
+
+# https://www.last.fm/api/show/user.getInfo
+# Manual API call
+async def get_lastfm_user() -> LastFmUser:
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(LASTFM_API_URL, params=user_params)
+            response.raise_for_status()
+            user_info = response.json()['user']
+    except httpx.TimeoutException:
+        raise Exception("Last.fm API request timed out")
+    except httpx.HTTPError as e:
+        raise Exception(f"Last.fm API error: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error fetching user info: {str(e)}")
+
+    return format_user_response(user_info)
+
+
+# Synchronous version
+# Async version above is preferred
+def get_lastfm_account_details() -> LastFmUser:
+    try:
+        response = requests.get(LASTFM_API_URL, params=user_params)
+        user_info = response.json()['user']
+    except requests.RequestException as e:
+        raise Exception(f"Last.fm API error: {str(e)}")
+
+    return format_user_response(user_info)
+
 
 """
 LastFM API related methods using pylast library

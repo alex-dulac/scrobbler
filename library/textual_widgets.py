@@ -18,7 +18,7 @@ from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.filters import ScrobbleFilter
 from repositories.scrobble_repo import ScrobbleRepository
-from services.lastfm_service import LastFmService
+from services.lastfm_service import LastFmService, get_lastfm_user
 
 css = """
     Button {
@@ -460,7 +460,7 @@ class LastfmUserWidget(Static):
         self.update("[cyan]Loading Last.fm user data...[/cyan]")
 
         try:
-            user_info = await self.lastfm_service.get_lastfm_user()
+            user_info = await get_lastfm_user()
         except Exception as e:
             self.update(Panel(f"[red]Error loading user info: {str(e)}[/red]", title="Error"))
             return
