@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
+from pydantic import BaseModel
 from rich.console import Group
 from rich.panel import Panel
 from rich.progress import Progress, TextColumn, BarColumn
@@ -99,6 +100,20 @@ view_controls = Container(
     id="view-controls"
 )
 
+class ViewConfig(BaseModel):
+    view: TuiViews
+    requires_db: bool
+
+
+view_configs = {
+    TuiIds.SHOW_TRACK_HISTORY.value: ViewConfig(view=TuiViews.TRACK_HISTORY, requires_db=True),
+    TuiIds.SHOW_ARTIST_STATS.value: ViewConfig(view=TuiViews.ARTIST_STATS, requires_db=True),
+    TuiIds.SHOW_SESSION.value: ViewConfig(view=TuiViews.SESSION, requires_db=False),
+    TuiIds.SHOW_MANUAL_SCROBBLE.value: ViewConfig(view=TuiViews.MANUAL_SCROBBLE, requires_db=True),
+    TuiIds.SHOW_LASTFM_USER.value: ViewConfig(view=TuiViews.LASTFM_USER, requires_db=False),
+    TuiIds.SHOW_WRAPPED.value: ViewConfig(view=TuiViews.WRAPPED, requires_db=True),
+}
+
 async def get_scrobbles_by_year_chart(
         scrobbles: list[LastFmTrack],
         table_name: str,
@@ -161,12 +176,18 @@ class BaseDbWidget(Static):
         self.db_connected = db_connected
 
 
-class TrackHistoryWidget(Static):
+class TrackHistoryWidget(BaseDbWidget):
     def __init__(self):
-        super().__init__(id=TuiViews.TRACK_HISTORY, classes="content-container")
+        super().__init__(
+            id=TuiViews.TRACK_HISTORY,
+            db_connected=False,
+        )
 
     @work
     async def update_chart(self, current_song: Track, years: range) -> None:
+        if not self.db_connected:
+            return
+
         if not current_song:
             self.update("No song selected")
             return
@@ -230,7 +251,6 @@ class ArtistStatsWidget(BaseDbWidget):
     @work
     async def update_artist_stats(self, current_song: Track, years: range) -> None:
         if not self.db_connected:
-            self.update("Database not connected")
             return
 
         if not current_song:
@@ -560,8 +580,6 @@ class WrappedWidget(BaseDbWidget):
                 })
 
         header = Text()
-        header.append(f"🤖 This is dulesAI in collaboration with Last.fm.\n\n", style="white")
-        header.append(f"🎵 {year} Wrappppped 🎵\n", style="bold magenta")
         header.append(f"\nTotal Scrobbles: ", style="white")
         header.append(f"{overview['total_scrobbles']:,}", style="bold cyan")
         header.append(f" | Unique Artists: ", style="white")

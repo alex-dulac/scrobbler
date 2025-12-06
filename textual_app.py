@@ -64,6 +64,7 @@ class ScrobblerApp(App):
         try:
             await session_manager.init_db()
             self.db_connected = True
+            self.track_history.db_connected = True
             self.artist_stats.db_connected = True
             self.manual_scrobble.db_connected = True
             self.wrapped.db_connected = True
@@ -130,6 +131,19 @@ class ScrobblerApp(App):
         await asyncio.sleep(1)
         self.exit()
 
+    def handle_view_change(self, button_id: str) -> bool:
+        config = widgets.view_configs.get(button_id)
+        if not config:
+            return False
+
+        if config.requires_db and not self.db_connected:
+            self.notify("This view requires a database connection.", severity="warning")
+            return False
+
+        self.current_view = config.view
+        self.update_view()
+        return True
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         active_css = "active-button"
 
@@ -139,18 +153,13 @@ class ScrobblerApp(App):
         def get_apple_music_button():
             return self.query_one(f"#{widgets.TuiIds.APPLE_MUSIC.value}")
 
-        def check_db():
-            if not self.db_connected:
-                self.notify("Database not connected. Widget unavailable.", severity="warning")
-                return False
-            return True
+        button_id = event.button.id
 
-        def handle_view_change(target_view: widgets.TuiViews):
-            self.current_view = target_view
-            self.update_view()
+        if button_id in widgets.view_configs:
+            self.handle_view_change(button_id)
+            return
 
-        match event.button.id:
-            # Integration buttons
+        match button_id:
             case widgets.TuiIds.APPLE_MUSIC:
                 self.state.active_integration = Integration.APPLE_MUSIC
                 self.poll_service = poll_apple_music
@@ -163,28 +172,6 @@ class ScrobblerApp(App):
                 get_apple_music_button().remove_class(active_css)
             case widgets.TuiIds.QUIT:
                 self.action_quit()
-
-            # View buttons
-            case widgets.TuiIds.SHOW_TRACK_HISTORY:
-                handle_view_change(widgets.TuiViews.TRACK_HISTORY)
-            case widgets.TuiIds.SHOW_ARTIST_STATS:
-                if not check_db():
-                    return
-                handle_view_change(widgets.TuiViews.ARTIST_STATS)
-            case widgets.TuiIds.SHOW_SESSION:
-                handle_view_change(widgets.TuiViews.SESSION)
-            case widgets.TuiIds.SHOW_MANUAL_SCROBBLE:
-                if not check_db():
-                    return
-                handle_view_change(widgets.TuiViews.MANUAL_SCROBBLE)
-            case widgets.TuiIds.SHOW_LASTFM_USER:
-                handle_view_change(widgets.TuiViews.LASTFM_USER)
-            case widgets.TuiIds.SHOW_WRAPPED:
-                if not check_db():
-                    return
-                handle_view_change(widgets.TuiViews.WRAPPED)
-
-            # Playback control buttons
             case widgets.TuiIds.PLAY_PAUSE:
                 self.playback_control(PlaybackAction.PAUSE)
             case widgets.TuiIds.NEXT_TRACK:
