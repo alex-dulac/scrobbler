@@ -3,10 +3,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from rich.console import RenderableType, Group
+from rich.console import Group
 from rich.panel import Panel
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
+from rich.text import Text
 from textual import work
 from textual.containers import Container
 from textual.widgets import Static, Button, Input
@@ -24,7 +25,7 @@ css = """
     Button {
         margin: 0 1;
     }
-    #song-info {
+    #now-playing {
         height: 3;
         content-align: center middle;
         margin: 1 0;
@@ -57,6 +58,7 @@ class TuiViews(str, Enum):
     SESSION = "session-info"
     MANUAL_SCROBBLE = "manual-scrobble"
     LASTFM_USER = "lastfm-user"
+    WRAPPED = "wrapped"
 
 
 class TuiIds(str, Enum):
@@ -71,6 +73,7 @@ class TuiIds(str, Enum):
     SHOW_SESSION = "show-session"
     SHOW_MANUAL_SCROBBLE = "show-manual-scrobble"
     SHOW_LASTFM_USER = "show-lastfm-user"
+    SHOW_WRAPPED = "show-wrapped"
 
 
 playback_controls = Container(
@@ -91,6 +94,7 @@ view_controls = Container(
     Button("Session", id=TuiIds.SHOW_SESSION),
     Button("Manual Scrobble", id=TuiIds.SHOW_MANUAL_SCROBBLE),
     Button("Last.fm User", id=TuiIds.SHOW_LASTFM_USER),
+    Button("Wrapped", id=TuiIds.SHOW_WRAPPED),
     classes="controls",
     id="view-controls"
 )
@@ -127,9 +131,9 @@ async def get_scrobbles_by_year_chart(
     return chart_table, year_counts
 
 
-class SongInfoWidget(Static):
-    def render(self) -> RenderableType:
-        return self.renderable
+class NowPlayingWidget(Static):
+    def __init__(self):
+        super().__init__(id="now-playing")
 
 
 class ScrobbleProgressBar(Static):
@@ -161,6 +165,7 @@ class TrackHistoryWidget(Static):
     def __init__(self):
         super().__init__(id=TuiViews.TRACK_HISTORY, classes="content-container")
 
+    @work
     async def update_chart(self, current_song: Track, years: range) -> None:
         if not current_song:
             self.update("No song selected")
@@ -222,6 +227,7 @@ class ArtistStatsWidget(BaseDbWidget):
             db_connected=db_connected,
         )
 
+    @work
     async def update_artist_stats(self, current_song: Track, years: range) -> None:
         if not self.db_connected:
             self.update("Database not connected")
@@ -345,7 +351,7 @@ class ManualScrobbleWidget(BaseDbWidget):
             id=TuiViews.MANUAL_SCROBBLE,
             db_connected=db_connected,
         )
-        self.lastfm: LastFmService | None = None
+        self.lastfm_service: LastFmService | None = None
         self.album_input = Input(placeholder="Enter album name", id="album-input")
         self.artist_input = Input(placeholder="Enter artist name", id="artist-input")
         self.dt_input = Input(placeholder="Enter around when you finished the album (2025-10-06 18:03:25)", id="datetime-input")
@@ -357,6 +363,7 @@ class ManualScrobbleWidget(BaseDbWidget):
 
     def on_mount(self) -> None:
         self.mount(Static("Album Search", classes="header"))
+        self.mount(Static("Scrobble all tracks of an album. Preview before sending to Last.fm", classes="header"))
         self.mount(self.album_input)
         self.mount(self.artist_input)
         self.mount(self.dt_input)
@@ -369,10 +376,11 @@ class ManualScrobbleWidget(BaseDbWidget):
         )
         self.mount(self.result_display)
 
+    @work
     async def handle_batch_scrobble(self):
         to_db = []
         for t in self.tracks:
-            scrobbled_track = await self.lastfm.scrobble(t, t.time_to_scrobble)
+            scrobbled_track = await self.lastfm_service.scrobble(t, t.time_to_scrobble)
             if scrobbled_track:
                 db_obj = Scrobble(
                     track_name=scrobbled_track.name,
@@ -389,27 +397,33 @@ class ManualScrobbleWidget(BaseDbWidget):
             await repo.add_and_commit(to_db)
             self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
 
+    @work(thread=True)
     async def handle_search(self):
         if not self.album_input.value or not self.artist_input.value:
             self.result_display.update("Please enter both album and artist names.")
             return
 
-        listened_at = datetime.now()
+        now = datetime.now()
+        listened_at = now
         if self.dt_input.value:
             listened_at = datetime.strptime(self.dt_input.value, config.DATETIME_FORMAT)
 
-        if listened_at > datetime.now():
+        if listened_at > now:
             self.result_display.update("The 'listened at' datetime cannot be in the future.")
             return
 
-        a = await self.lastfm.get_album(
-            title=self.album_input.value,
-            artist=self.artist_input.value,
-            with_tracks=True
-        )
+        try:
+            album = await self.lastfm_service.get_album(
+                title=self.album_input.value,
+                artist=self.artist_input.value,
+                with_tracks=True
+            )
+        except Exception as e:
+            self.result_display.update(Panel(f"[red]Error loading album info: {str(e)}[/red]", title="Error"))
+            return
 
-        if a and a.tracks:
-            self.tracks = a.tracks
+        if album and album.tracks:
+            self.tracks = album.tracks
             current_listened_at = listened_at
             tracks_list = ""
             for t in reversed(self.tracks):
@@ -418,34 +432,36 @@ class ManualScrobbleWidget(BaseDbWidget):
                 tracks_list += f"{t.order}. {t.name} ({time_to_scrobble.strftime(config.DATETIME_FORMAT)})\n"
                 current_listened_at = time_to_scrobble
             if tracks_list and not self.scrobble_button.is_mounted:
-                self.result_display.update(f"Album: {a.title}\nArtist: {a.artist_name}\nTracks:\n{tracks_list}")
+                self.result_display.update(f"Album: {album.title}\nArtist: {album.artist_name}\nTracks:\n{tracks_list}")
                 await self.mount(self.scrobble_button)
         else:
             self.result_display.update("No results found")
             if self.scrobble_button.is_mounted:
                 await self.scrobble_button.remove()
 
-    async def reset_inputs(self):
+    def reset_inputs(self):
         self.album_input.value = ""
         self.artist_input.value = ""
         self.dt_input.value = ""
         self.result_display.update("")
         if self.scrobble_button.is_mounted:
-            await self.scrobble_button.remove()
+            self.scrobble_button.remove()
         self.tracks = []
 
-    async def on_button_pressed(self, event):
+    def on_button_pressed(self, event):
         match event.button.id:
             case "clear":
-                await self.reset_inputs()
+                self.reset_inputs()
             case "search":
-                await self.handle_search()
+                self.result_display.update("Searching...")
+                self.result_display.refresh()
+                self.handle_search()
             case "scrobble-all":
-                await self.handle_batch_scrobble()
-                await self.reset_inputs()
+                self.handle_batch_scrobble()
+                self.reset_inputs()
 
 
-class LastfmUserWidget(Static):
+class LastFmUserWidget(Static):
     def __init__(self):
         super().__init__()
         self.lastfm_service: LastFmService | None = None
@@ -504,3 +520,187 @@ class LastfmUserWidget(Static):
 
         combined_display = Group(user_table, "", tracks_table)
         self.update(combined_display)
+
+
+class WrappedWidget(BaseDbWidget):
+    def __init__(self, db_connected: bool = False):
+        super().__init__(
+            id=TuiViews.WRAPPED,
+            db_connected=db_connected,
+        )
+        self.years = list(range(datetime.now().year, datetime.now().year))
+        self.update("Loading data...")
+
+    @work
+    async def get_wrapped_by_year(self, year: int) -> None:
+        if not self.db_connected:
+            self.update("Database not connected")
+            return
+
+        async with get_db() as session:
+            repo = ScrobbleRepository(session)
+
+            overview = await repo.get_year_overview(year)
+
+            year_comparison_data = []
+            for year_item in sorted(self.years, reverse=True):
+                total = await repo.get_total_scrobbles_by_year(year_item)
+                artists = await repo.get_unique_artists_by_year(year_item)
+                tracks = await repo.get_unique_tracks_by_year(year_item)
+                albums = await repo.get_unique_albums_by_year(year_item)
+                avg_per_day = total / 365 if total > 0 else 0
+
+                year_comparison_data.append({
+                    'year': year_item,
+                    'total': total,
+                    'artists': artists,
+                    'tracks': tracks,
+                    'albums': albums,
+                    'avg_per_day': avg_per_day
+                })
+
+        header = Text()
+        header.append(f"🤖 This is dulesAI in collaboration with Last.fm.\n\n", style="white")
+        header.append(f"🎵 {year} Wrappppped 🎵\n", style="bold magenta")
+        header.append(f"\nTotal Scrobbles: ", style="white")
+        header.append(f"{overview['total_scrobbles']:,}", style="bold cyan")
+        header.append(f" | Unique Artists: ", style="white")
+        header.append(f"{overview['unique_artists']:,}", style="bold green")
+        header.append(f" | Unique Tracks: ", style="white")
+        header.append(f"{overview['unique_tracks']:,}", style="bold yellow")
+        header.append(f" | Unique Albums: ", style="white")
+        header.append(f"{overview['unique_albums']:,}", style="bold blue")
+
+        top_artists_table = Table(title="🎤 Top Artists", expand=True, show_header=True)
+        top_artists_table.add_column("#", style="dim", width=4)
+        top_artists_table.add_column("Artist", style="bold magenta", width=40)
+        top_artists_table.add_column("Plays", style="cyan", justify="right", width=10)
+
+        for i, (artist, count) in enumerate(overview['top_artists'], 1):
+            rank_style = "bold yellow" if i <= 3 else "dim"
+            top_artists_table.add_row(
+                f"{i}",
+                artist,
+                f"{count:,}",
+                style=rank_style if i <= 3 else None
+            )
+
+        top_tracks_table = Table(title="🎵 Top Tracks", expand=True, show_header=True)
+        top_tracks_table.add_column("#", style="dim", width=4)
+        top_tracks_table.add_column("Track", style="bold green", width=30)
+        top_tracks_table.add_column("Artist", style="white", width=25)
+        top_tracks_table.add_column("Plays", style="cyan", justify="right", width=10)
+
+        for i, (track, artist, album, count) in enumerate(overview['top_tracks'], 1):
+            rank_style = "bold yellow" if i <= 3 else "dim"
+            top_tracks_table.add_row(
+                f"{i}",
+                track,
+                artist,
+                f"{count:,}",
+                style=rank_style if i <= 3 else None
+            )
+
+        top_albums_table = Table(title="💿 Top Albums", expand=True, show_header=True)
+        top_albums_table.add_column("#", style="dim", width=4)
+        top_albums_table.add_column("Album", style="bold blue", width=30)
+        top_albums_table.add_column("Artist", style="white", width=25)
+        top_albums_table.add_column("Plays", style="cyan", justify="right", width=10)
+
+        for i, (album, artist, count) in enumerate(overview['top_albums'], 1):
+            rank_style = "bold yellow" if i <= 3 else "dim"
+            top_albums_table.add_row(
+                f"{i}",
+                album,
+                artist,
+                f"{count:,}",
+                style=rank_style if i <= 3 else None
+            )
+
+        monthly_table = Table(title="📅 Monthly Activity", expand=True, show_header=True)
+        monthly_table.add_column("Month", style="bold white", width=12)
+        monthly_table.add_column("Scrobbles", style="cyan", justify="right", width=12)
+        monthly_table.add_column("Chart", style="green", width=40)
+
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+
+        monthly_data = {month: count for month, count in overview['monthly_breakdown']}
+        max_count = max(monthly_data.values()) if monthly_data else 1
+
+        for month_num in range(1, 13):
+            count = monthly_data.get(month_num, 0)
+            bar_length = int((count / max_count) * 30) if max_count > 0 else 0
+            bar = "█" * bar_length
+            monthly_table.add_row(
+                month_names[month_num - 1],
+                f"{count:,}",
+                bar
+            )
+
+        fun_facts = Text()
+        fun_facts.append("\n✨ Fun Facts ✨\n", style="bold yellow")
+
+        if overview['first_scrobble']:
+            first = overview['first_scrobble']
+            fun_facts.append(f"\n🎉 First scrobble: ", style="white")
+            fun_facts.append(f"{first.track_name}", style="bold green")
+            fun_facts.append(f" by ", style="white")
+            fun_facts.append(f"{first.artist_name}", style="bold magenta")
+            fun_facts.append(f" on {first.scrobbled_at.strftime('%B %d')}", style="dim")
+
+        if overview['most_active_day']:
+            date, count = overview['most_active_day']
+            fun_facts.append(f"\n🔥 Most active day: ", style="white")
+            fun_facts.append(f"{date}", style="bold cyan")
+            fun_facts.append(f" with ", style="white")
+            fun_facts.append(f"{count:,} scrobbles", style="bold yellow")
+
+        avg_per_day = overview['total_scrobbles'] / 365 if overview['total_scrobbles'] > 0 else 0
+        fun_facts.append(f"\n📊 Average per day: ", style="white")
+        fun_facts.append(f"{avg_per_day:.1f} scrobbles", style="bold cyan")
+
+        if overview['total_scrobbles'] > 0:
+            diversity_score = (overview['unique_tracks'] / overview['total_scrobbles']) * 100
+            fun_facts.append(f"\n🎨 Diversity score: ", style="white")
+            fun_facts.append(f"{diversity_score:.1f}%", style="bold green")
+            fun_facts.append(f" (unique tracks per scrobble)", style="dim")
+
+        comparison_table = Table(title="📊 Year Comparison", expand=True)
+        comparison_table.add_column("Year", style="bold magenta", width=8)
+        comparison_table.add_column("Scrobbles", style="cyan", justify="right", width=12)
+        comparison_table.add_column("Artists", style="green", justify="right", width=10)
+        comparison_table.add_column("Tracks", style="yellow", justify="right", width=10)
+        comparison_table.add_column("Albums", style="blue", justify="right", width=10)
+        comparison_table.add_column("Avg/Day", style="white", justify="right", width=10)
+
+        for year_data in year_comparison_data:
+            comparison_table.add_row(
+                str(year_data['year']),
+                f"{year_data['total']:,}",
+                f"{year_data['artists']:,}",
+                f"{year_data['tracks']:,}",
+                f"{year_data['albums']:,}",
+                f"{year_data['avg_per_day']:.1f}"
+            )
+
+        combined = Group(
+            Panel(header, border_style="magenta"),
+            "",
+            top_artists_table,
+            "",
+            top_tracks_table,
+            "",
+            top_albums_table,
+            "",
+            monthly_table,
+            "",
+            Panel(fun_facts, border_style="yellow"),
+            "",
+            comparison_table
+        )
+
+        self.update(combined)
+

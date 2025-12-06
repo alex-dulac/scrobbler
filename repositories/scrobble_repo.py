@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db import (
@@ -154,4 +154,133 @@ class ScrobbleRepository(BaseRepository):
         result = await self.execute(query)
         return result.scalars().all()
 
+    async def get_top_artists_by_year(self, year: int, limit: int = 10) -> list[tuple[str, int]]:
+        query = (
+            select(
+                Scrobble.artist_name,
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .group_by(Scrobble.artist_name)
+            .order_by(desc('play_count'))
+            .limit(limit)
+        )
+        result = await self.execute(query)
+        return result.all()
+
+    async def get_top_tracks_by_year(self, year: int, limit: int = 10) -> list[tuple[str, str, str, int]]:
+        query = (
+            select(
+                Scrobble.track_name,
+                Scrobble.artist_name,
+                Scrobble.album_name,
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .group_by(Scrobble.track_name, Scrobble.artist_name, Scrobble.album_name)
+            .order_by(desc('play_count'))
+            .limit(limit)
+        )
+        result = await self.execute(query)
+        return result.all()
+
+    async def get_top_albums_by_year(self, year: int, limit: int = 10) -> list[tuple[str, str, int]]:
+        query = (
+            select(
+                Scrobble.album_name,
+                Scrobble.artist_name,
+                func.count(Scrobble.id).label('play_count')
+            )
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .group_by(Scrobble.album_name, Scrobble.artist_name)
+            .order_by(desc('play_count'))
+            .limit(limit)
+        )
+        result = await self.execute(query)
+        return result.all()
+
+    async def get_total_scrobbles_by_year(self, year: int) -> int:
+        query = (
+            select(func.count(Scrobble.id))
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+        )
+        result = await self.execute(query)
+        return result.scalar() or 0
+
+    async def get_unique_artists_by_year(self, year: int) -> int:
+        query = (
+            select(func.count(func.distinct(Scrobble.artist_name)))
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+        )
+        result = await self.execute(query)
+        return result.scalar() or 0
+
+    async def get_unique_tracks_by_year(self, year: int) -> int:
+        query = (
+            select(func.count(func.distinct(Scrobble.track_name)))
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+        )
+        result = await self.execute(query)
+        return result.scalar() or 0
+
+    async def get_unique_albums_by_year(self, year: int) -> int:
+        query = (
+            select(func.count(func.distinct(Scrobble.album_name)))
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+        )
+        result = await self.execute(query)
+        return result.scalar() or 0
+
+    async def get_scrobbles_by_month(self, year: int) -> list[tuple[int, int]]:
+        query = (
+            select(
+                extract('month', Scrobble.scrobbled_at).label('month'),
+                func.count(Scrobble.id).label('count')
+            )
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .group_by('month')
+            .order_by('month')
+        )
+        result = await self.execute(query)
+        return result.all()
+
+    async def get_first_scrobble_by_year(self, year: int) -> Optional[Scrobble]:
+        query = (
+            select(Scrobble)
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .order_by(Scrobble.scrobbled_at.asc())
+            .limit(1)
+        )
+        result = await self.execute(query)
+        return result.scalar_one_or_none()
+
+    async def get_most_active_day_by_year(self, year: int) -> Optional[tuple[str, int]]:
+        query = (
+            select(
+                func.date(Scrobble.scrobbled_at).label('date'),
+                func.count(Scrobble.id).label('count')
+            )
+            .where(extract('year', Scrobble.scrobbled_at) == year)
+            .group_by('date')
+            .order_by(desc('count'))
+            .limit(1)
+        )
+        result = await self.execute(query)
+        return result.first()
+
+    async def get_year_overview(self, year: int) -> dict[str, Any]:
+        """Get comprehensive overview of listening stats for a year."""
+        return {
+            'year': year,
+            'total_scrobbles': await self.get_total_scrobbles_by_year(year),
+            'unique_artists': await self.get_unique_artists_by_year(year),
+            'unique_tracks': await self.get_unique_tracks_by_year(year),
+            'unique_albums': await self.get_unique_albums_by_year(year),
+            'top_artists': await self.get_top_artists_by_year(year, limit=10),
+            'top_tracks': await self.get_top_tracks_by_year(year, limit=10),
+            'top_albums': await self.get_top_albums_by_year(year, limit=10),
+            'monthly_breakdown': await self.get_scrobbles_by_month(year),
+            'first_scrobble': await self.get_first_scrobble_by_year(year),
+            'most_active_day': await self.get_most_active_day_by_year(year)
+        }
 
