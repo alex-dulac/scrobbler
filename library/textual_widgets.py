@@ -48,7 +48,10 @@ css = """
         width: 100%;
     }
     .active-button {
-        background: $accent;
+        background: $success;
+    }
+    .active-view {
+        background: $secondary;
     }
     """
 
@@ -106,12 +109,12 @@ class ViewConfig(BaseModel):
 
 
 view_configs = {
-    TuiIds.SHOW_TRACK_HISTORY.value: ViewConfig(view=TuiViews.TRACK_HISTORY, requires_db=True),
-    TuiIds.SHOW_ARTIST_STATS.value: ViewConfig(view=TuiViews.ARTIST_STATS, requires_db=True),
-    TuiIds.SHOW_SESSION.value: ViewConfig(view=TuiViews.SESSION, requires_db=False),
-    TuiIds.SHOW_MANUAL_SCROBBLE.value: ViewConfig(view=TuiViews.MANUAL_SCROBBLE, requires_db=True),
-    TuiIds.SHOW_LASTFM_USER.value: ViewConfig(view=TuiViews.LASTFM_USER, requires_db=False),
-    TuiIds.SHOW_WRAPPED.value: ViewConfig(view=TuiViews.WRAPPED, requires_db=True),
+    TuiIds.SHOW_TRACK_HISTORY: ViewConfig(view=TuiViews.TRACK_HISTORY, requires_db=True),
+    TuiIds.SHOW_ARTIST_STATS: ViewConfig(view=TuiViews.ARTIST_STATS, requires_db=True),
+    TuiIds.SHOW_SESSION: ViewConfig(view=TuiViews.SESSION, requires_db=False),
+    TuiIds.SHOW_MANUAL_SCROBBLE: ViewConfig(view=TuiViews.MANUAL_SCROBBLE, requires_db=True),
+    TuiIds.SHOW_LASTFM_USER: ViewConfig(view=TuiViews.LASTFM_USER, requires_db=False),
+    TuiIds.SHOW_WRAPPED: ViewConfig(view=TuiViews.WRAPPED, requires_db=True),
 }
 
 async def get_scrobbles_by_year_chart(

@@ -101,6 +101,15 @@ class ScrobblerApp(App):
         for view in views:
             view.display = False
 
+        view_buttons = self.query("#view-controls Button")
+        for button in view_buttons:
+            button.remove_class("active-view")
+
+        for button_id, config in widgets.view_configs.items():
+            if config.view == self.current_view:
+                self.query_one(f"#{button_id.value}").add_class("active-view")
+                break
+
         match self.current_view:
             case widgets.TuiViews.TRACK_HISTORY:
                 self.track_history.display = True
@@ -145,7 +154,7 @@ class ScrobblerApp(App):
         return True
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        active_css = "active-button"
+        active_button_css = "active-button"
 
         def get_spotify_button():
             return self.query_one(f"#{widgets.TuiIds.SPOTIFY.value}")
@@ -163,13 +172,13 @@ class ScrobblerApp(App):
             case widgets.TuiIds.APPLE_MUSIC:
                 self.state.active_integration = Integration.APPLE_MUSIC
                 self.poll_service = poll_apple_music
-                get_apple_music_button().add_class(active_css)
-                get_spotify_button().remove_class(active_css)
+                get_apple_music_button().add_class(active_button_css)
+                get_spotify_button().remove_class(active_button_css)
             case widgets.TuiIds.SPOTIFY:
                 self.state.active_integration = Integration.SPOTIFY
                 self.poll_service = self.spotify.poll_spotify
-                get_spotify_button().add_class(active_css)
-                get_apple_music_button().remove_class(active_css)
+                get_spotify_button().add_class(active_button_css)
+                get_apple_music_button().remove_class(active_button_css)
             case widgets.TuiIds.QUIT:
                 self.action_quit()
             case widgets.TuiIds.PLAY_PAUSE:
