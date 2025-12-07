@@ -504,9 +504,9 @@ class LastFmUserWidget(Static):
             self.update(Panel(f"[red]Error loading user info: {str(e)}[/red]", title="Error"))
             return
 
-        user_table = Table(title="Last.fm User Profile", show_header=False, box=None, width=100)
-        user_table.add_column("Field", style="cyan", width=20)
-        user_table.add_column("Value", style="white")
+        user_table = Table(title="Last.fm User Profile", width=100)
+        user_table.add_column("Category", style="cyan", width=20)
+        user_table.add_column("Information", style="green")
 
         user_table.add_row("Username", user_info.name)
         if user_info.realname:
@@ -527,13 +527,13 @@ class LastFmUserWidget(Static):
             self.update(user_table)  # Show user info even if tracks fail
             return
 
-        tracks_table = Table(title="Recent Scrobbles", show_header=True, box=None, expand=True)
-        tracks_table.add_column("Track", style="green", width=30)
-        tracks_table.add_column("Artist", style="yellow", width=25)
-        tracks_table.add_column("Album", style="magenta", width=25)
-        tracks_table.add_column("Time", style="cyan", width=20)
+        tracks_table = Table(title="Recent Scrobbles", expand=True)
+        tracks_table.add_column("Track", style="white", width=30)
+        tracks_table.add_column("Artist", style="cyan", width=25)
+        tracks_table.add_column("Album", style="yellow", width=25)
+        tracks_table.add_column("Time", style="green", width=20)
 
-        for t in recent_tracks:
+        for i, t in enumerate(recent_tracks, 1):
             tracks_table.add_row(
                 t.name,
                 t.artist,
