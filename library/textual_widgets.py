@@ -26,38 +26,55 @@ css = """
     Button {
         margin: 0 1;
     }
-    #now-playing {
-        height: 3;
-        content-align: center middle;
-        margin: 1 0;
-    }
-    #scrobble-progress {
-        height: 1;
-        margin: 2 2;
+    
+    #top-layout {
+        layout: horizontal;
+        height: auto;
         width: 100%;
-        content-align: center middle;
+        border: solid white;
+        margin: 1;
+        padding: 1 2;
     }
+    
+    #now-playing {
+        width: 1fr;
+        height: auto;
+        padding: 1 2;
+        text-align: center;
+        align: center middle;
+    }
+    
+    #scrobble-progress {
+        width: 1fr;
+        height: auto;
+        padding: 1 2;
+        align: center middle;
+    }
+    
     .controls {
         layout: horizontal;
         height: 3;
         align: center middle;
         margin-top: 1;
     }
+    
     .content-container {
         padding: 1 2;
         width: 100%;
     }
+    
     .active-button {
         background: $success;
     }
+    
     .active-view {
         background: $secondary;
     }
-    """
+"""
 
 
 class TuiViews(str, Enum):
-    TRACK_HISTORY = "track-history"
+    TRACK_STATS = "track-stats"
     ARTIST_STATS = "artist-stats"
     SESSION = "session-info"
     MANUAL_SCROBBLE = "manual-scrobble"
@@ -72,7 +89,7 @@ class TuiIds(str, Enum):
     PREVIOUS_TRACK = "previous-track"
     NEXT_TRACK = "next-track"
     QUIT = "quit"
-    SHOW_TRACK_HISTORY = "show-track-history"
+    SHOW_TRACK_STATS = "show-track-stats"
     SHOW_ARTIST_STATS = "show-artist-stats"
     SHOW_SESSION = "show-session"
     SHOW_MANUAL_SCROBBLE = "show-manual-scrobble"
@@ -93,7 +110,7 @@ playback_controls = Container(
 
 
 view_controls = Container(
-    Button("Track History", id=TuiIds.SHOW_TRACK_HISTORY),
+    Button("Track Stats", id=TuiIds.SHOW_TRACK_STATS),
     Button("Artist Stats", id=TuiIds.SHOW_ARTIST_STATS),
     Button("Session", id=TuiIds.SHOW_SESSION),
     Button("Manual Scrobble", id=TuiIds.SHOW_MANUAL_SCROBBLE),
@@ -103,13 +120,14 @@ view_controls = Container(
     id="view-controls"
 )
 
+
 class ViewConfig(BaseModel):
     view: TuiViews
     requires_db: bool
 
 
 view_configs = {
-    TuiIds.SHOW_TRACK_HISTORY: ViewConfig(view=TuiViews.TRACK_HISTORY, requires_db=True),
+    TuiIds.SHOW_TRACK_STATS: ViewConfig(view=TuiViews.TRACK_STATS, requires_db=True),
     TuiIds.SHOW_ARTIST_STATS: ViewConfig(view=TuiViews.ARTIST_STATS, requires_db=True),
     TuiIds.SHOW_SESSION: ViewConfig(view=TuiViews.SESSION, requires_db=False),
     TuiIds.SHOW_MANUAL_SCROBBLE: ViewConfig(view=TuiViews.MANUAL_SCROBBLE, requires_db=True),
@@ -159,17 +177,29 @@ class ScrobbleProgressBar(Static):
         super().__init__(id="scrobble-progress")
         self.progress = 0.0
         self.progress_bar = Progress(
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%", justify="right"),
+            TextColumn("{task.fields[percentage_text]}", justify="right"),
             BarColumn(bar_width=None),
             TextColumn("{task.description}", justify="left"),
             expand=True
         )
-        self.task_id = self.progress_bar.add_task("", total=100, completed=0)
+        self.task_id = self.progress_bar.add_task("", total=100, completed=0, percentage_text="  0%")
 
     def update_progress(self, value, description=""):
         percentage = min(100, max(0, int(value * 100)))
         self.progress = value
-        self.progress_bar.update(self.task_id, completed=percentage, description=description)
+
+        # Format percentage text with color markup
+        if percentage == 100:
+            percentage_text = f"[bold green]{percentage:>3.0f}%[/bold green]"
+        else:
+            percentage_text = f"{percentage:>3.0f}%"
+
+        self.progress_bar.update(
+            self.task_id,
+            completed=percentage,
+            description=description,
+            percentage_text=percentage_text
+        )
         self.update(self.progress_bar)
 
 
@@ -179,10 +209,10 @@ class BaseDbWidget(Static):
         self.db_connected = db_connected
 
 
-class TrackHistoryWidget(BaseDbWidget):
+class TrackStatsWidget(BaseDbWidget):
     def __init__(self):
         super().__init__(
-            id=TuiViews.TRACK_HISTORY,
+            id=TuiViews.TRACK_STATS,
             db_connected=False,
         )
 
@@ -422,6 +452,8 @@ class ManualScrobbleWidget(BaseDbWidget):
 
     @work(thread=True)
     async def handle_search(self):
+        self.result_display.update("Searching...")
+
         if not self.album_input.value or not self.artist_input.value:
             self.result_display.update("Please enter both album and artist names.")
             return
@@ -454,7 +486,7 @@ class ManualScrobbleWidget(BaseDbWidget):
                 t.time_to_scrobble = time_to_scrobble
                 tracks_list += f"{t.order}. {t.name} ({time_to_scrobble.strftime(config.DATETIME_FORMAT)})\n"
                 current_listened_at = time_to_scrobble
-            if tracks_list and not self.scrobble_button.is_mounted:
+            if tracks_list:
                 self.result_display.update(f"Album: {album.title}\nArtist: {album.artist_name}\nTracks:\n{tracks_list}")
                 await self.mount(self.scrobble_button)
         else:
@@ -476,8 +508,6 @@ class ManualScrobbleWidget(BaseDbWidget):
             case "clear":
                 self.reset_inputs()
             case "search":
-                self.result_display.update("Searching...")
-                self.result_display.refresh()
                 self.handle_search()
             case "scrobble-all":
                 self.handle_batch_scrobble()
@@ -490,13 +520,11 @@ class LastFmUserWidget(Static):
         self.lastfm_service: LastFmService | None = None
         self.update("[cyan]Loading Last.fm user data...[/cyan]")
 
-    @work
+    @work(thread=True)
     async def refresh_data(self):
         if not self.lastfm_service:
             self.update("Last.fm service not initialized")
             return
-
-        self.update("[cyan]Loading Last.fm user data...[/cyan]")
 
         try:
             user_info = await get_lastfm_user()

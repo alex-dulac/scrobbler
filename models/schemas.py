@@ -92,7 +92,7 @@ class Track(BaseModel):
     def time_remaining(self) -> float:
         return max(self.duration - self.time_played, 0)
 
-    def format_textual_song_info(self, is_pending: bool = False) -> Text:
+    def format_for_tui(self, is_pending: bool = False) -> Text:
         text = Text()
         text.append(f"{self.clean_name}\n", style="bold white")
         text.append(f"by ", style="dim")
@@ -102,7 +102,7 @@ class Track(BaseModel):
             text.append(f"{self.clean_album}", style="italic green")
 
         if is_pending:
-            text.append(f"\n{"⏱ Pending scrobble (no internet)"}", style="orange")
+            text.append(f"\n{"⏱ Pending scrobble (no internet)"}", style="red")
         elif self.display_status:
             text.append(f"\n{self.display_status}", style="yellow" if "Scrobbled" in self.display_status else "blue")
 
