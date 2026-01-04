@@ -55,8 +55,8 @@ class SpotifyService:
 
         track_data = result['item'] if result else None
         if track_data:
-            clean_name = await clean_up_title(track_data['name'])
-            clean_album = await clean_up_title(track_data['album']['name'])
+            clean_name = clean_up_title(track_data['name'])
+            clean_album = clean_up_title(track_data['album']['name'])
             duration = track_data['duration_ms'] / 1000  # convert ms to seconds
 
             return SpotifyTrack(

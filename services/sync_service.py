@@ -56,12 +56,12 @@ class SyncService:
             batch_scrobbles = []
 
             for t in tracks:
-                track_name = await clean_up_title(t.track.title) if clean else t.track.title
+                track_name = clean_up_title(t.track.title) if clean else t.track.title
                 artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
-                album_name = await clean_up_title(t.album) if clean and t.album else t.album
+                album_name = clean_up_title(t.album) if clean and t.album else t.album
                 scrobbled_at = datetime.fromtimestamp(int(t.timestamp))
 
-                existing = await self.scrobble_repo.get_scrobbles(
+                existing = self.scrobble_repo.get_scrobbles(
                     ScrobbleFilter(
                         track_name=track_name,
                         artist_name=artist_name,

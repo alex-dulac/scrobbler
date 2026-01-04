@@ -10,6 +10,7 @@ from loguru import logger
 from core import config
 from library.utils import clean_up_title, lastfm_friendly
 from models.schemas import LastFmUser, LastFmTrack, TopItem, Artist, Album, Track, SimilarTrack
+from services.base_async_client import BaseAsyncClient
 
 LASTFM_API_URL = config.LASTFM_API_URL
 LASTFM_API_KEY = config.LASTFM_API_KEY
@@ -56,7 +57,7 @@ def format_user_response(user_info: dict) -> LastFmUser:
 # Manual API call
 async def get_lastfm_user() -> LastFmUser:
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.get(LASTFM_API_URL, params=user_params)
             response.raise_for_status()
             user_info = response.json()['user']
@@ -85,8 +86,13 @@ def get_lastfm_account_details() -> LastFmUser:
 """
 LastFM API related methods using pylast library
 """
-class LastFmService:
+class LastFmService(BaseAsyncClient):
+    """
+    Service for interacting with the Last.fm API using pylast.
+    Pylast makes synchronous calls, so requests are run in a thread pool to avoid blocking.
+    """
     def __init__(self):
+        super().__init__()
         self.network = pylast.LastFMNetwork(
             api_key=LASTFM_API_KEY,
             api_secret=LASTFM_API_SECRET,
@@ -97,24 +103,36 @@ class LastFmService:
         logger.info(f"User {LASTFM_USERNAME} successfully authenticated")
 
     async def get_user_playcount(self) -> str:
-        playcount = self.user.get_playcount()
-        playcount = format(playcount, ',')
-        return playcount
+        playcount = await self._run_sync(self.user.get_playcount)
+        return format(int(playcount), ',')
 
     async def get_user_recent_tracks(self) -> list[LastFmTrack]:
-        recent_tracks = self.user.get_recent_tracks(limit=20)
+        recent_tracks = await self._run_sync(
+            self.user.get_recent_tracks,
+            limit=20
+        )
         tracks = []
         for track in recent_tracks:
-            scrobbled_at = datetime.fromtimestamp(int(track.timestamp))
-            album_name = track.album
-            artist_name = track.track.artist.name
-            t = LastFmTrack(
-                name=track.track.title,
-                artist=artist_name,
-                album=album_name,
-                scrobbled_at=scrobbled_at
-            )
-            tracks.append(t)
+            try:
+                # Note: Using `lambda t=track:` to capture the current track reference properly in the loop
+                timestamp = await self._run_sync(lambda t=track: int(t.timestamp))
+                scrobbled_at = datetime.fromtimestamp(timestamp)
+
+                album_name = await self._run_sync(lambda t=track: t.album)
+                artist_name = await self._run_sync(lambda t=track: t.track.artist.name)
+                track_title = await self._run_sync(lambda t=track: t.track.title)
+
+                lft = LastFmTrack(
+                    name=track_title,
+                    artist=artist_name,
+                    album=album_name,
+                    scrobbled_at=scrobbled_at
+                )
+                tracks.append(lft)
+            except Exception as e:
+                logger.error(f"Failed to process track: {e}")
+                continue
+
         return tracks
 
     async def get_user_recent_tracks_with_album_data(self) -> list[tuple[LastFmTrack, Album | None]]:
@@ -198,7 +216,8 @@ class LastFmService:
         timestamp = int(scrobbled_at.timestamp()) if scrobbled_at else int(time.time())
 
         try:
-            self.network.scrobble(
+            await self._run_sync(
+                self.network.scrobble,
                 artist=artist,
                 title=title,
                 timestamp=timestamp,
@@ -234,15 +253,15 @@ class LastFmService:
         image_url = None
 
         try:
-            image_url = album.get_cover_image(size=pylast.SIZE_MEGA)
+            image_url = await self._run_sync(album.get_cover_image, size=pylast.SIZE_MEGA)
         except pylast.PyLastError as e:
             logger.error(f"Failed to get album image_url: {e}")
 
         if image_url is None:
-            clean_title = await clean_up_title(album.title)
-            clean_album = self.network.get_album(title=clean_title, artist=album.artist.name)
+            clean_title = clean_up_title(album.title)
+            clean_album = await self._run_sync(self.network.get_album, title=clean_title, artist=album.artist.name)
             try:
-                image_url = clean_album.get_cover_image(size=pylast.SIZE_MEGA)
+                image_url = await self._run_sync(clean_album.get_cover_image, size=pylast.SIZE_MEGA)
             except pylast.PyLastError as e:
                 logger.error(f"Failed to get album image_url: {e}")
 
@@ -255,57 +274,83 @@ class LastFmService:
             with_tracks: bool = False,
             with_tags: bool = False
     ) -> Album | None:
-        album = self.network.get_album(
-            title=lastfm_friendly(title),
-            artist=lastfm_friendly(artist)
-        )
+        def _fetch_album_info():
+            album = self.network.get_album(
+                title=lastfm_friendly(title),
+                artist=lastfm_friendly(artist)
+            )
+            try:
+                return {
+                    'album': album,
+                    'title': album.get_title(True),
+                    'mbid': album.get_mbid() or None,
+                    'artist_name': album.get_artist().get_name(True),
+                    'url': album.get_url(),
+                    'playcount': int(album.get_playcount()),
+                    'user_playcount': int(album.get_userplaycount()),
+                    'listener_count': int(album.get_listener_count()),
+                    'wiki': album.get_wiki_summary()
+                }
+            except pylast.WSError as e:
+                logger.error(f"Failed to get album: {title} by {artist}: {e}")
+                return None
 
-        try:
-            album_title = album.get_title(True)
-            mbid = album.get_mbid() or None
-        except pylast.WSError as e:
-            logger.error(f"Failed to get album: {title} by {artist}: {e}")
+        album_data = await self._run_sync(_fetch_album_info)
+
+        if not album_data:
             return None
-
-        image_url = await self.get_album_image_url(album)
-        artist_name = album.get_artist().get_name(True)
 
         tracks = None
         if with_tracks:
+            def _fetch_tracks():
+                tracks_list = []
+                album_tracks = album_data['album'].get_tracks()
+                for order, t in enumerate(album_tracks, start=1):
+                    tracks_list.append({
+                        'title': t.title,
+                        'duration': t.get_duration()
+                    })
+                return tracks_list
+
+            tracks_data = await self._run_sync(_fetch_tracks)
             tracks = []
-            for order, t in enumerate(album.get_tracks(), start=1):
+            for order, track_data in enumerate(tracks_data, start=1):
                 obj = Track(
-                    name=t.title,
-                    clean_name=await clean_up_title(t.title),
-                    artist=artist_name,
-                    album=album_title,
-                    clean_album=await clean_up_title(album_title),
+                    name=track_data['title'],
+                    clean_name=clean_up_title(track_data['title']),
+                    artist=album_data['artist_name'],
+                    album=album_data['title'],
+                    clean_album=clean_up_title(album_data['title']),
                     order=order,
-                    duration=t.get_duration()
+                    duration=track_data['duration']
                 )
                 tracks.append(obj)
 
         tags = None
         if with_tags:
-            tags = []
-            for tag in album.get_top_tags():
-                tags.append({
-                    "tag_name": tag.item.name,
-                    "weight": int(tag.weight)
-                })
+            def _fetch_tags():
+                tags_list = []
+                album_tags = album_data['album'].get_top_tags()
+                for tag in album_tags:
+                    tags_list.append({
+                        'tag_name': tag.item.name,
+                        'weight': int(tag.weight)
+                    })
+                return tags_list
+
+            tags = await self._run_sync(_fetch_tags)
 
         return Album(
-            title=album_title,
-            artist_name=artist_name,
-            cover_image=image_url,
-            url=album.get_url(),
+            title=album_data['title'],
+            artist_name=album_data['artist_name'],
+            url=album_data['url'],
             tracks=tracks,
             tags=tags,
-            mbid=mbid,
-            playcount=int(album.get_playcount()),
-            user_playcount=int(album.get_userplaycount()),
-            listener_count=int(album.get_listener_count()),
-            wiki=album.get_wiki_summary(),
+            mbid=album_data['mbid'],
+            playcount=album_data['playcount'],
+            user_playcount=album_data['user_playcount'],
+            listener_count=album_data['listener_count'],
+            wiki=album_data['wiki'],
         )
 
     async def get_track(

@@ -450,7 +450,7 @@ class ManualScrobbleWidget(BaseDbWidget):
             await repo.add_and_commit(to_db)
             self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
 
-    @work(thread=True)
+    @work
     async def handle_search(self):
         self.result_display.update("Searching...")
 
@@ -520,7 +520,7 @@ class LastFmUserWidget(Static):
         self.lastfm_service: LastFmService | None = None
         self.update("[cyan]Loading Last.fm user data...[/cyan]")
 
-    @work(thread=True)
+    @work
     async def refresh_data(self):
         if not self.lastfm_service:
             self.update("Last.fm service not initialized")

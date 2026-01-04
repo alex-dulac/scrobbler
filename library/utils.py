@@ -3,7 +3,7 @@ import re
 import aiohttp
 
 
-async def clean_up_title(title: str) -> str:
+def clean_up_title(title: str) -> str:
     """
     Clean up the album or song title to get the actual name.
     Examples: High 'N' Dry (Remastered 2018), Time to Break Up (Bonus Track)
