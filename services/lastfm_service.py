@@ -71,9 +71,8 @@ async def get_lastfm_user() -> LastFmUser:
     return format_user_response(user_info)
 
 
-# Synchronous version
-# Async version above is preferred
 def get_lastfm_account_details() -> LastFmUser:
+    """Deprecated: Use async version `get_lastfm_user` instead."""
     try:
         response = requests.get(LASTFM_API_URL, params=user_params)
         user_info = response.json()['user']
@@ -135,15 +134,8 @@ class LastFmService(BaseAsyncClient):
 
         return tracks
 
-    async def get_user_recent_tracks_with_album_data(self) -> list[tuple[LastFmTrack, Album | None]]:
-        recent_tracks = await self.get_user_recent_tracks()
-        tracks = []
-        for t in recent_tracks:
-            a = await self.get_album(t.album, t.artist)
-            tracks.append([t, a])
-        return tracks
-
     async def get_user_loved_tracks(self) -> list[LastFmTrack]:
+        # TODO update to use async calls
         loved_tracks = self.user.get_loved_tracks()
         tracks = []
         for track in loved_tracks:
@@ -158,6 +150,7 @@ class LastFmService(BaseAsyncClient):
         return tracks
 
     async def get_user_top_artists(self) -> list[TopItem]:
+        # TODO update to use async calls
         top_artists = self.user.get_top_artists(limit=10)
         artists = []
         for artist in top_artists:
@@ -177,6 +170,7 @@ class LastFmService(BaseAsyncClient):
         return artists
 
     async def get_user_top_albums(self) -> list[TopItem]:
+        # TODO update to use async calls
         top_albums = self.user.get_top_albums(limit=10)
         albums = []
         for album in top_albums:
@@ -198,10 +192,11 @@ class LastFmService(BaseAsyncClient):
 
     async def update_now_playing(self, current_song: Track) -> bool:
         try:
-            self.network.update_now_playing(
+            await self._run_sync(
+                self.network.update_now_playing,
                 artist=current_song.artist,
-                title=current_song.clean_name,
-                album=current_song.clean_album
+                title=current_song.name,
+                album=current_song.album
             )
             # logger.info("Updated Last.fm now playing")
             return True
@@ -237,6 +232,7 @@ class LastFmService(BaseAsyncClient):
             return None
 
     async def get_album_image_url(self, album: pylast.Album) -> str | None:
+        # TODO update to use async calls
         """
         Retrieves the cover image URL for a given album.
 
@@ -359,6 +355,7 @@ class LastFmService(BaseAsyncClient):
             artist_name: str,
             with_similar: bool = False,
     ) -> LastFmTrack | None:
+        # TODO update to use async calls
         track = self.network.get_track(
             artist=lastfm_friendly(artist_name),
             title=lastfm_friendly(track_name)
@@ -398,6 +395,7 @@ class LastFmService(BaseAsyncClient):
         )
 
     async def current_track_user_scrobbles(self, current_song: Track) -> bool | list[LastFmTrack]:
+        # TODO update to use async calls
         try:
             tracks = []
 
@@ -426,9 +424,11 @@ class LastFmService(BaseAsyncClient):
             return False
 
     async def user_weekly_chart_dates(self):
+        # TODO update to use async calls
         return self.user.get_weekly_chart_dates()
 
     async def user_weekly_album_charts(self, from_date: str, to_date: str):
+        # TODO update to use async calls
         weekly_albums = self.user.get_weekly_album_charts(from_date, to_date)
 
         results = []
@@ -443,6 +443,7 @@ class LastFmService(BaseAsyncClient):
         return results
 
     async def get_user_30_day_stats(self):
+        # TODO update to use async calls
         thirty_days_ago = int((datetime.now() - timedelta(days=30)).timestamp())
         now = int(datetime.now().timestamp())
 
