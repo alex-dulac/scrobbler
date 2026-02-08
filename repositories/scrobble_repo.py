@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import select, func, desc, extract
+from pylast import PlayedTrack
+from sqlalchemy import select, func, desc, extract, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db import (
@@ -141,6 +143,40 @@ class ScrobbleRepository(BaseRepository):
         )
         result = await self.execute(query)
         return result.all()
+
+    async def get_scrobbles_batch(self, track_data: list[PlayedTrack]) -> list[Scrobble]:
+        """
+        Efficiently check for existing scrobbles in a sync batch.
+
+        Args:
+            track_data: List of PlayedTrack objects from Last.fm API
+
+        Returns:
+            List of Scrobble objects that already exist in the database
+        """
+        if not track_data:
+            return []
+
+        conditions = []
+        for t in track_data:
+            track_name = t.track.title
+            artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
+            timestamp = int(t.timestamp)
+            scrobbled_at = datetime.fromtimestamp(timestamp)
+
+            condition = (
+                    (to_lower(Scrobble.track_name) == to_lower(track_name))
+                    & (to_lower(Scrobble.artist_name) == to_lower(artist_name))
+                    & (Scrobble.scrobbled_at == scrobbled_at)
+            )
+            conditions.append(condition)
+
+        if not conditions:
+            return []
+
+        query = select(Scrobble).where(or_(*conditions))
+        result = await self.execute(query)
+        return result.scalars().all()
 
     async def get_scrobbles_like_track(self, track_name: str, artist_name: str) -> Any:
         # If we passed in "Song Name", ideally we would get results like

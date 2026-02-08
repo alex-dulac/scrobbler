@@ -134,6 +134,13 @@ class LastFmService(BaseAsyncClient):
 
         return tracks
 
+    async def get_user_played_tracks_by_time_to(self, time_to: int, limit: int = 20) -> list[pylast.PlayedTrack]:
+        return await self._run_sync(
+            self.user.get_recent_tracks,
+            limit=limit,
+            time_to=time_to
+        )
+
     async def get_user_loved_tracks(self) -> list[LastFmTrack]:
         # TODO update to use async calls
         loved_tracks = self.user.get_loved_tracks()
