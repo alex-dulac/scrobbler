@@ -205,9 +205,6 @@ class ScrobblerApp(App):
 
     @work
     async def handle_scrobble(self):
-        if self.state.is_scrobbling:
-            return
-
         self.state.is_scrobbling = True
         scrobbled_track = await self.lastfm.scrobble(self.state.current_song)
         if scrobbled_track:
@@ -251,7 +248,7 @@ class ScrobblerApp(App):
         if compare.update_song_playing_status:
             self.state.current_song.playing = poll.playing
 
-        if self.state.current_song.playing and not self.state.current_song.scrobbled:
+        if self.state.current_song.playing and not self.state.current_song.scrobbled and not self.state.is_scrobbling:
             self.state.current_song.time_played += 1
             if self.state.current_song.is_ready_to_be_scrobbled:
                 self.handle_scrobble()
