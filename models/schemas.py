@@ -68,7 +68,19 @@ class Track(BaseModel):
 
     @property
     def scrobble_threshold(self) -> int:
-        return min(round(self.duration / 2), 120) if self.duration else 120
+        """
+        Determine the scrobble threshold based on the track's duration.
+        - If duration is not available, default to 120 seconds.
+        - If duration is 30 seconds or less, scrobble just before the track ends.
+        - Otherwise, scrobble after half the duration, capped at 120 seconds.
+        """
+        if not self.duration:
+            return 120
+
+        if self.duration <= 30:
+            return round(self.duration - 1)
+
+        return min(round(self.duration / 2), 120)
 
     @property
     def scrobble_progress_value(self) -> float:

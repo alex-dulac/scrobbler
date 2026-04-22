@@ -40,6 +40,7 @@ class ScrobblerApp(App):
         self.manual_scrobble = widgets.ManualScrobbleWidget()
         self.lastfm_user = widgets.LastFmUserWidget()
         self.wrapped = widgets.WrappedWidget()
+        self.sync_scrobbles = widgets.SyncScrobblesWidget()
 
     def compose(self) -> ComposeResult:
         top_layout = Container(
@@ -58,6 +59,7 @@ class ScrobblerApp(App):
         yield self.manual_scrobble
         yield self.lastfm_user
         yield self.wrapped
+        yield self.sync_scrobbles
         yield Footer()
 
     def update_progress_bar(self) -> None:
@@ -74,6 +76,7 @@ class ScrobblerApp(App):
             self.artist_stats.db_connected = True
             self.manual_scrobble.db_connected = True
             self.wrapped.db_connected = True
+            self.sync_scrobbles.db_connected = True
             self.notify("Database connected successfully.")
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
@@ -101,7 +104,8 @@ class ScrobblerApp(App):
             self.session_info,
             self.manual_scrobble,
             self.lastfm_user,
-            self.wrapped
+            self.wrapped,
+            self.sync_scrobbles,
         ]
 
         for view in views:
@@ -130,6 +134,8 @@ class ScrobblerApp(App):
             case widgets.TuiViews.WRAPPED:
                 self.wrapped.get_wrapped_by_year(2025)
                 self.wrapped.display = True
+            case widgets.TuiViews.SYNC_SCROBBLES:
+                self.sync_scrobbles.display = True
 
     @work
     async def action_quit(self) -> None:

@@ -80,6 +80,7 @@ class TuiViews(str, Enum):
     MANUAL_SCROBBLE = "manual-scrobble"
     LASTFM_USER = "lastfm-user"
     WRAPPED = "wrapped"
+    SYNC_SCROBBLES = "sync-scrobbles"
 
 
 class TuiIds(str, Enum):
@@ -95,6 +96,7 @@ class TuiIds(str, Enum):
     SHOW_MANUAL_SCROBBLE = "show-manual-scrobble"
     SHOW_LASTFM_USER = "show-lastfm-user"
     SHOW_WRAPPED = "show-wrapped"
+    SHOW_SYNC_SCROBBLES = "show-sync-scrobbles"
 
 
 playback_controls = Container(
@@ -116,6 +118,7 @@ view_controls = Container(
     Button("Manual Scrobble", id=TuiIds.SHOW_MANUAL_SCROBBLE),
     Button("Last.fm User", id=TuiIds.SHOW_LASTFM_USER),
     Button("Wrapped", id=TuiIds.SHOW_WRAPPED),
+    Button("Sync Scrobbles", id=TuiIds.SHOW_SYNC_SCROBBLES),
     classes="controls",
     id="view-controls"
 )
@@ -133,6 +136,7 @@ view_configs = {
     TuiIds.SHOW_MANUAL_SCROBBLE: ViewConfig(view=TuiViews.MANUAL_SCROBBLE, requires_db=True),
     TuiIds.SHOW_LASTFM_USER: ViewConfig(view=TuiViews.LASTFM_USER, requires_db=False),
     TuiIds.SHOW_WRAPPED: ViewConfig(view=TuiViews.WRAPPED, requires_db=True),
+    TuiIds.SHOW_SYNC_SCROBBLES: ViewConfig(view=TuiViews.SYNC_SCROBBLES, requires_db=True),
 }
 
 async def get_scrobbles_by_year_chart(
@@ -397,7 +401,7 @@ class ManualScrobbleWidget(BaseDbWidget):
     """
     Widget for manually searching and scrobbling albums.
     Allows user to input album name, artist name, and optional datetime.
-    Useful if you are old school like me and listen to CDs and vinyl records.
+    Useful if you are old school and listen to CDs and vinyl records.
     """
     def __init__(self, db_connected: bool = False):
         super().__init__(
@@ -429,26 +433,53 @@ class ManualScrobbleWidget(BaseDbWidget):
         )
         self.mount(self.result_display)
 
-    @work
     async def handle_batch_scrobble(self):
+        if not self.lastfm_service:
+            self.notify("Last.fm service not initialized", severity="error")
+            self.reset_inputs()
+            return
+
+        if not self.tracks:
+            self.notify("No tracks to scrobble", severity="warning")
+            self.reset_inputs()
+            return
+
         to_db = []
+        successful_count = 0
+
         for t in self.tracks:
-            scrobbled_track = await self.lastfm_service.scrobble(t, t.time_to_scrobble)
-            if scrobbled_track:
-                db_obj = Scrobble(
-                    track_name=scrobbled_track.name,
-                    artist_name=scrobbled_track.artist,
-                    album_name=scrobbled_track.album,
-                    scrobbled_at=scrobbled_track.scrobbled_at,
-                )
-                to_db.append(db_obj)
+            try:
+                scrobbled_track = await self.lastfm_service.scrobble(t, t.time_to_scrobble)
+                if scrobbled_track:
+                    db_obj = Scrobble(
+                        track_name=scrobbled_track.name,
+                        artist_name=scrobbled_track.artist,
+                        album_name=scrobbled_track.album,
+                        scrobbled_at=scrobbled_track.scrobbled_at,
+                    )
+                    to_db.append(db_obj)
+                    successful_count += 1
+                else:
+                    self.notify(f"Failed to scrobble: {t.display_name}", severity="warning")
+            except Exception as e:
+                self.notify(f"Error scrobbling {t.display_name}: {str(e)}", severity="error")
+
         if len(to_db) > 0:
             if not self.db_connected:
-                self.update("Database not connected")
+                self.notify("Database not connected", severity="error")
+                self.reset_inputs()
                 return
-            repo = ScrobbleRepository()
-            await repo.add_and_commit(to_db)
-            self.notify(f"Scrobbled and saved {len(to_db)} tracks to the database.")
+
+            try:
+                repo = ScrobbleRepository()
+                await repo.add_and_commit(to_db)
+                self.notify(f"✓ Scrobbled and saved {len(to_db)} tracks to database")
+            except Exception as e:
+                self.notify(f"Error saving to database: {str(e)}", severity="error")
+        else:
+            self.notify("No tracks were successfully scrobbled", severity="warning")
+
+        self.reset_inputs()
 
     @work
     async def handle_search(self):
@@ -460,8 +491,13 @@ class ManualScrobbleWidget(BaseDbWidget):
 
         now = datetime.now()
         listened_at = now
+
         if self.dt_input.value:
-            listened_at = datetime.strptime(self.dt_input.value, config.DATETIME_FORMAT)
+            try:
+                listened_at = datetime.strptime(self.dt_input.value, config.DATETIME_FORMAT)
+            except ValueError:
+                self.result_display.update(f"Invalid date format. Use: {config.DATETIME_FORMAT}")
+                return
 
         if listened_at > now:
             self.result_display.update("The 'listened at' datetime cannot be in the future.")
@@ -474,21 +510,25 @@ class ManualScrobbleWidget(BaseDbWidget):
                 with_tracks=True
             )
         except Exception as e:
-            self.result_display.update(Panel(f"[red]Error loading album info: {str(e)}[/red]", title="Error"))
+            self.result_display.update(f"Error loading album: {str(e)}")
             return
 
         if album and album.tracks:
             self.tracks = album.tracks
             current_listened_at = listened_at
             tracks_list = ""
+
             for t in reversed(self.tracks):
                 time_to_scrobble = current_listened_at - timedelta(milliseconds=t.duration)
                 t.time_to_scrobble = time_to_scrobble
                 tracks_list += f"{t.order}. {t.name} ({time_to_scrobble.strftime(config.DATETIME_FORMAT)})\n"
                 current_listened_at = time_to_scrobble
+
             if tracks_list:
-                self.result_display.update(f"Album: {album.title}\nArtist: {album.artist_name}\nTracks:\n{tracks_list}")
-                await self.mount(self.scrobble_button)
+                display_text = f"Album: {album.title}\nArtist: {album.artist_name}\n\nTracks:\n{tracks_list}"
+                self.result_display.update(display_text)
+                if not self.scrobble_button.is_mounted:
+                    await self.mount(self.scrobble_button)
         else:
             self.result_display.update("No results found")
             if self.scrobble_button.is_mounted:
@@ -510,8 +550,8 @@ class ManualScrobbleWidget(BaseDbWidget):
             case "search":
                 self.handle_search()
             case "scrobble-all":
-                self.handle_batch_scrobble()
-                self.reset_inputs()
+                self.notify("Scrobbling tracks...")
+                self.run_worker(self.handle_batch_scrobble())
 
 
 class LastFmUserWidget(Static):
@@ -752,4 +792,179 @@ class WrappedWidget(BaseDbWidget):
         )
 
         self.update(combined)
+
+
+class SyncScrobblesWidget(BaseDbWidget):
+    """
+    Widget for syncing scrobbles from Last.fm to the database.
+    Provides progress tracking and error handling for long-running sync operations.
+    """
+    def __init__(self, db_connected: bool = False):
+        super().__init__(
+            id=TuiViews.SYNC_SCROBBLES,
+            db_connected=db_connected,
+        )
+        self.sync_service = None
+
+        self.time_from_input = Input(
+            placeholder="Start date (YYYY-MM-DD) - optional, leave blank for all history",
+            id="time-from-input"
+        )
+        self.time_to_input = Input(
+            placeholder="End date (YYYY-MM-DD) - optional, defaults to today",
+            id="time-to-input"
+        )
+
+        self.sync_button = Button("Sync Scrobbles", id="sync-scrobbles")
+        self.sync_ref_data_button = Button("Sync Reference Data", id="sync-ref-data")
+        self.clear_button = Button("Clear", id="clear-sync")
+
+        self.result_display = Static(id="result")
+
+    def on_mount(self) -> None:
+        from services.sync_service import SyncService
+
+        self.sync_service = SyncService()
+        self.mount(Static("Sync Scrobbles from Last.fm", classes="header"))
+        self.mount(Static("Fetch your scrobble history and enrich with metadata", classes="header"))
+        self.mount(self.time_from_input)
+        self.mount(self.time_to_input)
+
+        quick_select = Container(
+            Button("This Year", id="quick-this-year"),
+            Button("Last 30 Days", id="quick-30days"),
+            Button("Last Year", id="quick-last-year"),
+            Button("All History", id="quick-all"),
+            classes="controls"
+        )
+        self.mount(quick_select)
+
+        self.mount(
+            Container(
+                self.sync_button,
+                self.sync_ref_data_button,
+                self.clear_button,
+                classes="controls"
+            )
+        )
+        self.mount(self.result_display)
+        self.update_display("Ready to sync scrobbles\nDate format: YYYY-MM-DD (e.g., 2025-01-15)")
+
+    def update_display(self, message: str) -> None:
+        """Update the result display with formatted message."""
+        from rich.panel import Panel
+        self.result_display.update(Panel(message, title="Sync Status"))
+
+    def reset_inputs(self) -> None:
+        """Clear all input fields."""
+        self.time_from_input.value = ""
+        self.time_to_input.value = ""
+        self.result_display.update("")
+
+    @work
+    async def handle_sync_scrobbles(self):
+        """
+        Sync scrobbles from Last.fm API to database.
+        Converts user input dates and calls the sync service.
+        """
+        if not self.db_connected or not self.sync_service:
+            self.update_display("[red]Error: Database not connected or service not initialized[/red]")
+            return
+
+        # Get input values, None if empty
+        time_from = self.time_from_input.value.strip() if self.time_from_input.value else None
+        time_to = self.time_to_input.value.strip() if self.time_to_input.value else None
+
+        # Validate date format if provided
+        try:
+            if time_from:
+                datetime.strptime(time_from, "%Y-%m-%d")
+            if time_to:
+                datetime.strptime(time_to, "%Y-%m-%d")
+        except ValueError as e:
+            self.update_display(f"[red]Invalid date format: {str(e)}\nUse YYYY-MM-DD format[/red]")
+            return
+
+        try:
+            self.update_display("[cyan]Syncing scrobbles...\nThis may take several minutes depending on your history.[/cyan]")
+
+            result = await self.sync_service.sync_scrobbles(
+                time_from=time_from,
+                time_to=time_to,
+                clean=True  # Cleans up titles (removes special chars)
+            )
+
+            fetched = result.get("fetched_scrobbles", 0)
+            saved = result.get("new_scrobbles", 0)
+
+            date_range = f"from {time_from}" if time_from else "all history"
+            if time_to:
+                date_range = f"{date_range} to {time_to}"
+
+            message = f"""[green]✓ Sync Complete![/green]
+
+Date Range: {date_range}
+Fetched: {fetched} scrobbles from Last.fm
+Saved: {saved} new scrobbles to database
+"""
+            self.update_display(message)
+            self.notify(f"Synced {saved} new scrobbles")
+            self.reset_inputs()
+
+        except Exception as e:
+            error_msg = f"[red]Sync failed: {str(e)}[/red]"
+            self.update_display(error_msg)
+            self.notify(f"Sync error: {str(e)}", severity="error")
+
+    @work
+    async def handle_sync_ref_data(self):
+        """
+        Sync reference data (artists, albums, tracks) enriched with Last.fm metadata.
+        This adds tags, bio, URLs, playcount stats, etc. to your database.
+        """
+        if not self.db_connected or not self.sync_service:
+            self.update_display("[red]Error: Database not connected or service not initialized[/red]")
+            return
+
+        try:
+            self.update_display("[cyan]Syncing reference data...\nThis may take a while due to Last.fm API rate limits (1 request/second).[/cyan]")
+
+            await self.sync_service.sync_all_ref_data()
+
+            message = "[green]✓ Reference data sync complete![/green]\nArtist bios, tags, similar artists, and stats have been updated."
+            self.update_display(message)
+            self.notify("Reference data sync complete")
+            self.reset_inputs()
+
+        except Exception as e:
+            error_msg = f"[red]Reference data sync failed: {str(e)}[/red]"
+            self.update_display(error_msg)
+            self.notify(f"Sync error: {str(e)}", severity="error")
+
+    def on_button_pressed(self, event):
+        from datetime import datetime, timedelta
+
+        today = datetime.now()
+
+        match event.button.id:
+            case "quick-this-year":
+                self.time_from_input.value = f"{today.year}-01-01"
+                self.time_to_input.value = f"{today.year}-12-31"
+            case "quick-30days":
+                thirty_days_ago = today - timedelta(days=30)
+                self.time_from_input.value = thirty_days_ago.strftime("%Y-%m-%d")
+                self.time_to_input.value = ""
+            case "quick-last-year":
+                last_year = today.year - 1
+                self.time_from_input.value = f"{last_year}-01-01"
+                self.time_to_input.value = f"{last_year}-12-31"
+            case "quick-all":
+                self.time_from_input.value = ""
+                self.time_to_input.value = ""
+            case "sync-scrobbles":
+                self.handle_sync_scrobbles()
+            case "sync-ref-data":
+                self.handle_sync_ref_data()
+            case "clear-sync":
+                self.reset_inputs()
 

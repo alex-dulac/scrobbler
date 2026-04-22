@@ -202,8 +202,8 @@ class LastFmService(BaseAsyncClient):
             await self._run_sync(
                 self.network.update_now_playing,
                 artist=current_song.artist,
-                title=current_song.name,
-                album=current_song.album
+                title=current_song.clean_name,
+                album=current_song.clean_album
             )
             # logger.info("Updated Last.fm now playing")
             return True
