@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.text import Text
 from textual import work
 from textual.containers import Container
+from textual.message import Message
 from textual.widgets import Static, Button, Input
 
 from core import config
@@ -169,6 +170,13 @@ async def get_scrobbles_by_year_chart(
     chart_table.add_section()
 
     return chart_table, year_counts
+
+
+"""
+Messages for children classes to post to the parent class
+"""
+class RefreshLastfmUser(Message):
+    pass
 
 
 class NowPlayingWidget(Static):
@@ -909,7 +917,7 @@ Saved: {saved} new scrobbles to database
 """
             self.update_display(message)
             self.notify(f"Synced {saved} new scrobbles")
-            self.reset_inputs()
+            self.post_message(RefreshLastfmUser())
 
         except Exception as e:
             error_msg = f"[red]Sync failed: {str(e)}[/red]"

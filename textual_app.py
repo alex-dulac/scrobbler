@@ -232,6 +232,10 @@ class ScrobblerApp(App):
             self.state.session.add_pending(self.state.current_song)
         self.state.is_scrobbling = False
 
+    def on_refresh_lastfm_user(self, event: widgets.RefreshLastfmUser) -> None:
+        self.notify(f"Refreshing lastfm user data.")
+        self.lastfm_user.refresh_data()
+
     @work
     async def update_display(self) -> None:
         poll: Track = await self.poll_service()
