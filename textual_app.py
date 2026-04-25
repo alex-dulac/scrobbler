@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 
+from loguru import logger
 from textual.app import App, ComposeResult
 from textual.containers import Container
 from textual.widgets import Header, Footer, Button
@@ -84,6 +85,8 @@ class ScrobblerApp(App):
         # init services
         self.lastfm = await get_lastfm_service()
         self.spotify = await get_spotify_service()
+
+        logger.remove() # loguru interferes with the ui
 
         # widgets etc.
         self.now_playing.update(self.WAITING)

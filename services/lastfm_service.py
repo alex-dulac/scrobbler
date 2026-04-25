@@ -205,10 +205,10 @@ class LastFmService(BaseAsyncClient):
                 title=current_song.clean_name,
                 album=current_song.clean_album
             )
-            # logger.info("Updated Last.fm now playing")
+            logger.info("Updated Last.fm now playing")
             return True
         except pylast.PyLastError as e:
-            # logger.error(f"Failed to update Last.fm now playing: {e}")
+            logger.error(f"Failed to update Last.fm now playing: {e}")
             return False
 
     async def scrobble(self, track: Track, scrobbled_at: datetime = None) -> LastFmTrack | None:
@@ -225,7 +225,7 @@ class LastFmService(BaseAsyncClient):
                 timestamp=timestamp,
                 album=album
             )
-            # logger.info(f"Scrobbled to LastFm: {track.display_name}")
+            logger.info(f"Scrobbled to LastFm: {track.display_name}")
             return LastFmTrack(
                 name=title,
                 clean_name=title,

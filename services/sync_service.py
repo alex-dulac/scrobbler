@@ -58,7 +58,7 @@ class SyncService:
 
                 # O(1) lookup in set
                 if (track_name.lower(), artist_name.lower(), scrobbled_at) in existing_set:
-                    # logger.info(f"Scrobble already exists in DB: {artist_name} - {track_name} at {scrobbled_at}. Skipping.")
+                    logger.info(f"Scrobble already exists in DB: {artist_name} - {track_name} at {scrobbled_at}. Skipping.")
                     continue
 
                 logger.info(f"Adding scrobble to DB: {artist_name} - {track_name} at {scrobbled_at}.")
