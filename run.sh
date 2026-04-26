@@ -8,9 +8,10 @@ if [ ! -d "venv" ]; then
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Creating virtual environment..."
         python -m venv venv
+        source venv/bin/activate
+
         echo "Installing dependencies..."
         python -m pip install --upgrade pip
-        source venv/bin/activate
         pip install -r requirements.txt
     else
         echo "Exiting."
