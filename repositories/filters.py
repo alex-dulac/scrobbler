@@ -23,7 +23,7 @@ class ScrobbleFilter(BaseModel):
     scrobbled_before: str | None = None  # YYYY-MM-DD
 
 
-async def build_query(f: ScrobbleFilter) -> Select[tuple[Scrobble]]:
+async def build_query(f: ScrobbleFilter | None) -> Select[tuple[Scrobble]]:
     query = select(Scrobble)
 
     if f is None:

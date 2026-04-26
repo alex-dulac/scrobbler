@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from pylast import PlayedTrack
-from sqlalchemy import select, func, desc, extract, or_
+from sqlalchemy import select, func, desc, extract, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db import (
@@ -157,24 +157,33 @@ class ScrobbleRepository(BaseRepository):
         if not track_data:
             return []
 
-        conditions = []
+        lookup_keys = set()
+
         for t in track_data:
             track_name = t.track.title
             artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
             timestamp = int(t.timestamp)
             scrobbled_at = datetime.fromtimestamp(timestamp)
 
-            condition = (
-                    (to_lower(Scrobble.track_name) == to_lower(track_name))
-                    & (to_lower(Scrobble.artist_name) == to_lower(artist_name))
-                    & (Scrobble.scrobbled_at == scrobbled_at)
-            )
-            conditions.append(condition)
+            lookup_keys.add((
+                track_name.lower(),
+                artist_name.lower(),
+                scrobbled_at,
+            ))
 
-        if not conditions:
+        if not lookup_keys:
             return []
 
-        query = select(Scrobble).where(or_(*conditions))
+        query = (
+            select(Scrobble)
+            .where(
+                tuple_(
+                    func.lower(Scrobble.track_name),
+                    func.lower(Scrobble.artist_name),
+                    Scrobble.scrobbled_at,
+                ).in_(lookup_keys)
+            )
+        )
         result = await self.execute(query)
         return result.scalars().all()
 
