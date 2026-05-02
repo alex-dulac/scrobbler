@@ -632,13 +632,20 @@ class WrappedWidget(BaseDbWidget):
             db_connected=db_connected,
         )
         self.years = list(range(datetime.now().year, datetime.now().year))
-        self.update("Loading data...")
+        self.cached_year = None
+        self.cached_result = None
 
     @work
     async def get_wrapped_by_year(self, year: int) -> None:
         if not self.db_connected:
             self.update("Database not connected")
             return
+
+        if self.cached_year == year and self.cached_result:
+            self.update(self.cached_result)
+            return
+
+        self.update(f"Crunching your wrapped data for {year}...")
 
         async with get_db() as session:
             repo = ScrobbleRepository(session)
@@ -805,6 +812,10 @@ class WrappedWidget(BaseDbWidget):
 
         self.update(combined)
 
+        self.cached_year = year
+        self.cached_result = combined
+        self.notify(f"Wrapped data for {year} is ready")
+
 
 class SyncScrobblesWidget(BaseDbWidget):
     """
@@ -843,8 +854,9 @@ class SyncScrobblesWidget(BaseDbWidget):
         self.mount(self.time_to_input)
 
         quick_select = Container(
-            Button("This Year", id="quick-this-year"),
+            Button("Last 7 Days", id="quick-7days"),
             Button("Last 30 Days", id="quick-30days"),
+            Button("This Year", id="quick-this-year"),
             Button("Last Year", id="quick-last-year"),
             Button("All History", id="quick-all"),
             classes="controls"
@@ -864,7 +876,6 @@ class SyncScrobblesWidget(BaseDbWidget):
 
     def update_display(self, message: str) -> None:
         """Update the result display with formatted message."""
-        from rich.panel import Panel
         self.result_display.update(Panel(message, title="Sync Status"))
 
     def reset_inputs(self) -> None:
@@ -887,7 +898,6 @@ class SyncScrobblesWidget(BaseDbWidget):
         time_from = self.time_from_input.value.strip() if self.time_from_input.value else None
         time_to = self.time_to_input.value.strip() if self.time_to_input.value else None
 
-        # Validate date format if provided
         try:
             if time_from:
                 datetime.strptime(time_from, "%Y-%m-%d")
@@ -903,7 +913,7 @@ class SyncScrobblesWidget(BaseDbWidget):
             result = await self.sync_service.sync_scrobbles(
                 time_from=time_from,
                 time_to=time_to,
-                clean=True  # Cleans up titles (removes special chars)
+                clean=True
             )
 
             fetched = result.get("fetched_scrobbles", 0)
@@ -963,6 +973,10 @@ Saved: {saved} new scrobbles to database
             case "quick-30days":
                 thirty_days_ago = today - timedelta(days=30)
                 self.time_from_input.value = thirty_days_ago.strftime("%Y-%m-%d")
+                self.time_to_input.value = ""
+            case "quick-7days":
+                seven_days_ago = today - timedelta(days=7)
+                self.time_from_input.value = seven_days_ago.strftime("%Y-%m-%d")
                 self.time_to_input.value = ""
             case "quick-last-year":
                 last_year = today.year - 1

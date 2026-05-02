@@ -164,6 +164,9 @@ class ScrobblerApp(App):
             self.notify("This view requires a database connection.", severity="warning")
             return False
 
+        if self.current_view == config.view:
+            return False
+
         self.current_view = config.view
         self.update_view()
         return True
