@@ -178,6 +178,9 @@ Messages for children classes to post to the parent class
 class RefreshLastfmUser(Message):
     pass
 
+class RefreshAll(Message):
+    pass
+
 
 class NowPlayingWidget(Static):
     def __init__(self):
@@ -488,6 +491,7 @@ class ManualScrobbleWidget(BaseDbWidget):
             self.notify("No tracks were successfully scrobbled", severity="warning")
 
         self.reset_inputs()
+        self.post_message(RefreshLastfmUser())
 
     @work
     async def handle_search(self):
@@ -950,8 +954,6 @@ Saved: {saved} new scrobbles to database
             self.notify(f"Sync error: {str(e)}", severity="error")
 
     def on_button_pressed(self, event):
-        from datetime import datetime, timedelta
-
         today = datetime.now()
 
         match event.button.id:

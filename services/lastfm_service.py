@@ -99,7 +99,7 @@ class LastFmService(BaseAsyncClient):
             password_hash=LASTFM_PASSWORD_HASH
         )
         self.user: pylast.User = self.network.get_user(LASTFM_USERNAME)
-        logger.info(f"User {LASTFM_USERNAME} successfully authenticated")
+        logger.info(f"Last.fm user {LASTFM_USERNAME} successfully authenticated.")
 
     async def get_user_playcount(self) -> str:
         playcount = await self._run_sync(self.user.get_playcount)

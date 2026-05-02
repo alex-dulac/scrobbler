@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Optional, AsyncGenerator
 
+from loguru import logger
 from sqlalchemy import AsyncAdaptedQueuePool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncEngine, AsyncSession
 
@@ -14,8 +15,16 @@ class SessionManager:
         self.session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
     async def init_db(self) -> None:
+        url = config.DATABASE_URL
+
+        if url is None:
+            raise ValueError('DATABASE_URL environment variable is not set')
+
+        is_local = url.find("localhost") != -1
+        logger.info(f"Connecting to {"local" if is_local else "remote"} database...")
+
         self.engine = create_async_engine(
-            url=config.DATABASE_URL,
+            url=url,
             poolclass=AsyncAdaptedQueuePool,
             pool_pre_ping=True,
         )

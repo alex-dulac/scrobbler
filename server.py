@@ -6,6 +6,7 @@ import uvicorn
 from loguru import logger
 
 from core import config
+from library.dependencies import init_deps
 from routers.router import router
 from core.database import session_manager
 
@@ -21,6 +22,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not connect to database: {e}")
         logger.warning(f"Some api features might not work as expected.")
+
+    await init_deps()
 
     yield
 

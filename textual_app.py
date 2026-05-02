@@ -9,7 +9,7 @@ from textual import work
 
 from core.database import session_manager
 from library.comparison import Comparison
-from library.dependencies import get_lastfm_service, get_spotify_service
+from library.dependencies import init_deps
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
 from models.schemas import Track
@@ -42,6 +42,15 @@ class ScrobblerApp(App):
         self.lastfm_user = widgets.LastFmUserWidget()
         self.wrapped = widgets.WrappedWidget()
         self.sync_scrobbles = widgets.SyncScrobblesWidget()
+        self.views = [
+            self.track_stats,
+            self.artist_stats,
+            self.session_info,
+            self.manual_scrobble,
+            self.lastfm_user,
+            self.wrapped,
+            self.sync_scrobbles,
+        ]
 
     def compose(self) -> ComposeResult:
         top_layout = Container(
@@ -83,8 +92,11 @@ class ScrobblerApp(App):
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
 
         # init services
-        self.lastfm = await get_lastfm_service()
-        self.spotify = await get_spotify_service()
+        lastfm, spotify, sync = await init_deps()
+        self.lastfm = lastfm
+        self.spotify = spotify
+        self.manual_scrobble.lastfm_service = self.lastfm
+        self.lastfm_user.lastfm_service = self.lastfm
 
         logger.remove() # loguru interferes with the ui
 
@@ -93,25 +105,13 @@ class ScrobblerApp(App):
         self.artist_stats.update(self.WAITING)
         self.years = range(self.state.user.registered.year, datetime.today().year + 1)
         self.wrapped.years = self.years
-        self.manual_scrobble.lastfm_service = self.lastfm
-        self.lastfm_user.lastfm_service = self.lastfm
         self.lastfm_user.refresh_data()
         self.update_progress_bar()
         self.update_view()
         self.set_interval(1, self.update_display) # primary app functionality
 
     def update_view(self) -> None:
-        views = [
-            self.track_stats,
-            self.artist_stats,
-            self.session_info,
-            self.manual_scrobble,
-            self.lastfm_user,
-            self.wrapped,
-            self.sync_scrobbles,
-        ]
-
-        for view in views:
+        for view in self.views:
             view.display = False
 
         view_buttons = self.query("#view-controls Button")
@@ -212,6 +212,18 @@ class ScrobblerApp(App):
             if result is False:
                 self.notify("Failed to control playback. Spotify Premium required.")
 
+    def refresh_all(self):
+        self.track_stats.update_chart(self.state.current_song, self.years)
+        self.artist_stats.update_artist_stats(self.state.current_song, self.years)
+        self.lastfm_user.refresh_data()
+
+    def on_refresh_lastfm_user(self, event: widgets.RefreshLastfmUser) -> None:
+        self.notify(f"Refreshing lastfm user data.")
+        self.lastfm_user.refresh_data()
+
+    def on_refresh_all(self, event: widgets.RefreshAll) -> None:
+        self.refresh_all()
+
     @work
     async def handle_scrobble(self):
         self.state.is_scrobbling = True
@@ -227,14 +239,10 @@ class ScrobblerApp(App):
                 self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
             # pause to ensure getting the recent scrobbles from last.fm includes this current one
             await asyncio.sleep(1)
-            self.lastfm_user.refresh_data()
+            self.refresh_all()
         else:
             self.state.session.add_pending(self.state.current_song)
         self.state.is_scrobbling = False
-
-    def on_refresh_lastfm_user(self, event: widgets.RefreshLastfmUser) -> None:
-        self.notify(f"Refreshing lastfm user data.")
-        self.lastfm_user.refresh_data()
 
     @work
     async def update_display(self) -> None:
