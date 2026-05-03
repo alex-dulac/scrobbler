@@ -16,12 +16,14 @@ from textual.widgets import Static, Button, Input
 
 from core import config
 from core.database import get_db
+from library.dependencies import get_lastfm_service, get_sync_service
 from library.session_scrobbles import SessionScrobbles
 from models.db import Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.filters import ScrobbleFilter
 from repositories.scrobble_repo import ScrobbleRepository
 from services.lastfm_service import LastFmService, get_lastfm_user
+from services.sync_service import SyncService
 
 css = """
     Button {
@@ -178,6 +180,7 @@ Messages for children classes to post to the parent class
 class RefreshLastfmUser(Message):
     pass
 
+
 class RefreshAll(Message):
     pass
 
@@ -218,10 +221,19 @@ class ScrobbleProgressBar(Static):
         self.update(self.progress_bar)
 
 
-class BaseDbWidget(Static):
-    def __init__(self, id = None, db_connected: bool = False):
+class BaseLastfmWidget(Static):
+    def __init__(self, id = None):
         super().__init__(id=id, classes="content-container")
-        self.db_connected = db_connected
+        self.lastfm_service: LastFmService | None = None
+
+    async def on_mount(self):
+        self.lastfm_service = await get_lastfm_service()
+
+
+class BaseDbWidget(BaseLastfmWidget):
+    def __init__(self, id = None, db_connected: bool = False):
+        super().__init__(id=id)
+        self.db_connected: bool = db_connected
 
 
 class TrackStatsWidget(BaseDbWidget):
@@ -419,7 +431,6 @@ class ManualScrobbleWidget(BaseDbWidget):
             id=TuiViews.MANUAL_SCROBBLE,
             db_connected=db_connected,
         )
-        self.lastfm_service: LastFmService | None = None
         self.album_input = Input(placeholder="Enter album name", id="album-input")
         self.artist_input = Input(placeholder="Enter artist name", id="artist-input")
         self.dt_input = Input(placeholder="Enter around when you finished the album (2025-10-06 18:03:25)", id="datetime-input")
@@ -566,10 +577,9 @@ class ManualScrobbleWidget(BaseDbWidget):
                 self.run_worker(self.handle_batch_scrobble())
 
 
-class LastFmUserWidget(Static):
+class LastFmUserWidget(BaseLastfmWidget):
     def __init__(self):
         super().__init__()
-        self.lastfm_service: LastFmService | None = None
         self.update("[cyan]Loading Last.fm user data...[/cyan]")
 
     @work
@@ -827,7 +837,7 @@ class SyncScrobblesWidget(BaseDbWidget):
             id=TuiViews.SYNC_SCROBBLES,
             db_connected=db_connected,
         )
-        self.sync_service = None
+        self.sync_service: SyncService | None = None
 
         self.time_from_input = Input(
             placeholder="Start date (YYYY-MM-DD) - optional, leave blank for all history",
@@ -844,14 +854,12 @@ class SyncScrobblesWidget(BaseDbWidget):
 
         self.result_display = Static(id="result")
 
-    def on_mount(self) -> None:
-        from services.sync_service import SyncService
-
-        self.sync_service = SyncService()
-        self.mount(Static("Sync Scrobbles from Last.fm", classes="header"))
-        self.mount(Static("Fetch your scrobble history and enrich with metadata", classes="header"))
-        self.mount(self.time_from_input)
-        self.mount(self.time_to_input)
+    async def on_mount(self) -> None:
+        self.sync_service = await get_sync_service()
+        await self.mount(Static("Sync Scrobbles from Last.fm", classes="header"))
+        await self.mount(Static("Fetch your scrobble history and enrich with metadata", classes="header"))
+        await self.mount(self.time_from_input)
+        await self.mount(self.time_to_input)
 
         quick_select = Container(
             Button("Last 7 Days", id="quick-7days"),
@@ -861,9 +869,9 @@ class SyncScrobblesWidget(BaseDbWidget):
             Button("All History", id="quick-all"),
             classes="controls"
         )
-        self.mount(quick_select)
+        await self.mount(quick_select)
 
-        self.mount(
+        await self.mount(
             Container(
                 self.sync_button,
                 self.sync_ref_data_button,
@@ -871,7 +879,7 @@ class SyncScrobblesWidget(BaseDbWidget):
                 classes="controls"
             )
         )
-        self.mount(self.result_display)
+        await self.mount(self.result_display)
         self.update_display("Ready to sync scrobbles\nDate format: YYYY-MM-DD (e.g., 2025-01-15)")
 
     def update_display(self, message: str) -> None:

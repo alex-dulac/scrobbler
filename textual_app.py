@@ -9,7 +9,7 @@ from textual import work
 
 from core.database import session_manager
 from library.comparison import Comparison
-from library.dependencies import init_deps
+from library.dependencies import get_lastfm_service, get_spotify_service
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
 from models.schemas import Track
@@ -82,23 +82,16 @@ class ScrobblerApp(App):
         try:
             await session_manager.init_db()
             self.db_connected = True
-            self.track_stats.db_connected = True
-            self.artist_stats.db_connected = True
-            self.manual_scrobble.db_connected = True
-            self.wrapped.db_connected = True
-            self.sync_scrobbles.db_connected = True
+            for widget in self.query(widgets.BaseDbWidget):
+                widget.db_connected = True
             self.notify("Database connected successfully.")
         except Exception as e:
             self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
 
         # init services
-        lastfm, spotify, sync = await init_deps()
-        self.lastfm = lastfm
-        self.spotify = spotify
-        self.manual_scrobble.lastfm_service = self.lastfm
-        self.lastfm_user.lastfm_service = self.lastfm
-
-        logger.remove() # loguru interferes with the ui
+        self.lastfm = await get_lastfm_service()
+        self.spotify = await get_spotify_service()
+        logger.remove() # downstream loguru interferes with the ui
 
         # widgets etc.
         self.now_playing.update(self.WAITING)
