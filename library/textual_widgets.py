@@ -1,4 +1,5 @@
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
@@ -220,10 +221,13 @@ class ScrobbleProgressBar(Static):
         )
         self.update(self.progress_bar)
 
-
+"""
+Content Widgets for stats and operations
+"""
 class BaseLastfmWidget(Static):
     def __init__(self, id = None):
         super().__init__(id=id, classes="content-container")
+        self.years: range | None = None
         self.lastfm_service: LastFmService | None = None
 
     async def on_mount(self):
@@ -235,6 +239,13 @@ class BaseDbWidget(BaseLastfmWidget):
         super().__init__(id=id)
         self.db_connected: bool = db_connected
 
+    @asynccontextmanager
+    async def get_repo(self):
+        if not self.db_connected:
+            raise RuntimeError("Database not connected")
+        async with get_db() as session:
+            yield ScrobbleRepository(session)
+
 
 class TrackStatsWidget(BaseDbWidget):
     def __init__(self):
@@ -244,7 +255,7 @@ class TrackStatsWidget(BaseDbWidget):
         )
 
     @work
-    async def update_chart(self, current_song: Track, years: range) -> None:
+    async def update_chart(self, current_song: Track) -> None:
         if not self.db_connected:
             return
 
@@ -252,8 +263,7 @@ class TrackStatsWidget(BaseDbWidget):
             self.update("No song selected")
             return
 
-        async with get_db() as session:
-            repo = ScrobbleRepository(session)
+        async with self.get_repo() as repo:
             scrobbles = await repo.get_scrobbles_like_track(
                 track_name=current_song.clean_name,
                 artist_name=current_song.artist
@@ -266,10 +276,10 @@ class TrackStatsWidget(BaseDbWidget):
         chart_table, year_counts = await get_scrobbles_by_year_chart(
             scrobbles=scrobbles,
             table_name=f"Scrobbles by Year for: {current_song.display_name}",
-            years=years
+            years=self.years
         )
         total_scrobbles = sum(year_counts.values())
-        avg_per_year = total_scrobbles / len(years)
+        avg_per_year = total_scrobbles / len(self.years)
 
         summary_table = Table(title="Additional Stats", width=60)
         summary_table.add_column("Metric", style="dim")
@@ -309,7 +319,7 @@ class ArtistStatsWidget(BaseDbWidget):
         )
 
     @work
-    async def update_artist_stats(self, current_song: Track, years: range) -> None:
+    async def update_artist_stats(self, current_song: Track) -> None:
         if not self.db_connected:
             return
 
@@ -319,8 +329,7 @@ class ArtistStatsWidget(BaseDbWidget):
 
         artist = current_song.artist
 
-        async with get_db() as session:
-            repo = ScrobbleRepository(session)
+        async with self.get_repo() as repo:
             top_played_tracks = await repo.get_top_tracks_by_artist(artist, limit=30)
             top_played_albums = await repo.get_top_albums_by_artist(artist)
             f = ScrobbleFilter(artist_name=artist)
@@ -360,7 +369,7 @@ class ArtistStatsWidget(BaseDbWidget):
         chart_table, year_counts = await get_scrobbles_by_year_chart(
             scrobbles=all_scrobbles_by_artist,
             table_name=f"Scrobbles by Year for: {artist}",
-            years=years
+            years=self.years
         )
 
         combined = Group(chart_table, "", tracks, "", albums)
@@ -502,7 +511,7 @@ class ManualScrobbleWidget(BaseDbWidget):
             self.notify("No tracks were successfully scrobbled", severity="warning")
 
         self.reset_inputs()
-        self.post_message(RefreshLastfmUser())
+        self.post_message(RefreshAll())
 
     @work
     async def handle_search(self):
@@ -641,7 +650,6 @@ class WrappedWidget(BaseDbWidget):
             id=TuiViews.WRAPPED,
             db_connected=db_connected,
         )
-        self.years = list(range(datetime.now().year, datetime.now().year))
         self.cached_year = None
         self.cached_result = None
 
@@ -657,9 +665,7 @@ class WrappedWidget(BaseDbWidget):
 
         self.update(f"Crunching your wrapped data for {year}...")
 
-        async with get_db() as session:
-            repo = ScrobbleRepository(session)
-
+        async with self.get_repo() as repo:
             overview = await repo.get_year_overview(year)
 
             year_comparison_data = []
@@ -939,7 +945,7 @@ Saved: {saved} new scrobbles to database
 """
             self.update_display(message)
             self.notify(f"Synced {saved} new scrobbles")
-            self.post_message(RefreshLastfmUser())
+            self.post_message(RefreshAll())
 
         except Exception as e:
             error_msg = f"[red]Sync failed: {str(e)}[/red]"

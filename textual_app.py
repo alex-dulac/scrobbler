@@ -32,7 +32,6 @@ class ScrobblerApp(App):
         self.poll_service = poll_apple_music
         self.current_view = widgets.TuiViews.LASTFM_USER
         self.db_connected: bool = False
-        self.years: range | None = None
         self.now_playing = widgets.NowPlayingWidget()
         self.progress_bar = widgets.ScrobbleProgressBar()
         self.track_stats = widgets.TrackStatsWidget()
@@ -96,19 +95,30 @@ class ScrobblerApp(App):
         # widgets etc.
         self.now_playing.update(self.WAITING)
         self.artist_stats.update(self.WAITING)
-        self.years = range(self.state.user.registered.year, datetime.today().year + 1)
-        self.wrapped.years = self.years
+        for widget in self.query(widgets.BaseLastfmWidget):
+            widget.years = range(self.state.user.registered.year, datetime.today().year + 1)
         self.lastfm_user.refresh_data()
         self.update_progress_bar()
         self.update_view()
         self.set_interval(1, self.update_display) # primary app functionality
 
+    @property
+    def widget_map(self) -> dict:
+        return {
+            widgets.TuiViews.TRACK_STATS: self.track_stats,
+            widgets.TuiViews.ARTIST_STATS: self.artist_stats,
+            widgets.TuiViews.SESSION: self.session_info,
+            widgets.TuiViews.MANUAL_SCROBBLE: self.manual_scrobble,
+            widgets.TuiViews.LASTFM_USER: self.lastfm_user,
+            widgets.TuiViews.WRAPPED: self.wrapped,
+            widgets.TuiViews.SYNC_SCROBBLES: self.sync_scrobbles,
+        }
+
     def update_view(self) -> None:
         for view in self.views:
             view.display = False
 
-        view_buttons = self.query("#view-controls Button")
-        for button in view_buttons:
+        for button in self.query("#view-controls Button"):
             button.remove_class("active-view")
 
         for button_id, config in widgets.view_configs.items():
@@ -116,22 +126,9 @@ class ScrobblerApp(App):
                 self.query_one(f"#{button_id.value}").add_class("active-view")
                 break
 
-        match self.current_view:
-            case widgets.TuiViews.TRACK_STATS:
-                self.track_stats.display = True
-            case widgets.TuiViews.ARTIST_STATS:
-                self.artist_stats.display = True
-            case widgets.TuiViews.SESSION:
-                self.session_info.display = True
-            case widgets.TuiViews.MANUAL_SCROBBLE:
-                self.manual_scrobble.display = True
-            case widgets.TuiViews.LASTFM_USER:
-                self.lastfm_user.display = True
-            case widgets.TuiViews.WRAPPED:
-                self.wrapped.get_wrapped_by_year(2025)
-                self.wrapped.display = True
-            case widgets.TuiViews.SYNC_SCROBBLES:
-                self.sync_scrobbles.display = True
+        widget = self.widget_map.get(self.current_view)
+        if widget:
+            widget.display = True
 
     @work
     async def action_quit(self) -> None:
@@ -209,8 +206,8 @@ class ScrobblerApp(App):
                 self.notify("Failed to control playback. Spotify Premium required.")
 
     def refresh_all(self):
-        self.track_stats.update_chart(self.state.current_song, self.years)
-        self.artist_stats.update_artist_stats(self.state.current_song, self.years)
+        self.track_stats.update_chart(self.state.current_song)
+        self.artist_stats.update_artist_stats(self.state.current_song)
         self.lastfm_user.refresh_data()
 
     def on_refresh_lastfm_user(self, event: widgets.RefreshLastfmUser) -> None:
@@ -256,8 +253,8 @@ class ScrobblerApp(App):
         if compare.song_has_changed:
             self.state.current_song = poll
             self.state.current_song.time_played = 0
-            self.track_stats.update_chart(self.state.current_song, self.years)
-            self.artist_stats.update_artist_stats(self.state.current_song, self.years)
+            self.track_stats.update_chart(self.state.current_song)
+            self.artist_stats.update_artist_stats(self.state.current_song)
             if compare.update_lastfm_now_playing:
                 lastfm_updated = await self.lastfm.update_now_playing(self.state.current_song)
                 self.state.current_song.lastfm_updated_now_playing = lastfm_updated
