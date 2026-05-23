@@ -8,22 +8,22 @@ The application supports syncing your Last.fm library to a PostgreSQL database f
 
 ## Features
 
-- **FastAPI**: A high-performance web framework for building APIs.
-- **pylast**: A Python interface to Last.fm's API.
-- **applescript**: A Python library to run AppleScript commands, used to interact with the Apple Music application.
-- **spotipy**: A Python interface to Spotify's API.
-- **Textual**: A TUI (Text User Interface) framework for Python, used to create an interactive terminal interface.
-- **PostgreSQL**: Object-relational database system for storing scrobble data. This is not required but recommended for deeper insights and statistics.
-- **SQLAlchemy**: SQL toolkit and Object-Relational Mapping (ORM) library for Python, used to interact with the PostgreSQL database.
+- **Real-time scrobbling** from Apple Music and Spotify to Last.fm
+- **TUI dashboard** with multiple views: track history, artist stats, session info, and yearly wrapped
+- **Manual scrobbling** by album with custom timestamps — useful for CDs and vinyl
+- **FastAPI web API** for integration with frontend applications
+- **PostgreSQL sync** — import your full Last.fm scrobble history into a local database for deeper analysis
+- **Playback controls** for Apple Music and Spotify directly from the terminal
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.10+
-- Apple Music application installed on your macOS (if you want to scrobble from Apple Music)
-- Spotify account (if you want to scrobble from Spotify. API credential docs: https://developer.spotify.com/documentation/web-api)
-- Last.fm account and API credentials (https://www.last.fm/api/account/create)
+- Python 3.13+
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- macOS with Apple Music installed (required for Apple Music scrobbling)
+- Spotify account with API credentials (if scrobbling from Spotify — [docs](https://developer.spotify.com/documentation/web-api))
+- Last.fm account and API credentials ([create here](https://www.last.fm/api/account/create))
 - PostgreSQL database (optional but recommended for full feature access)
 
 ### Installation
@@ -34,18 +34,12 @@ The application supports syncing your Last.fm library to a PostgreSQL database f
     cd py-scrobbler
     ```
 
-2. **Set up a virtual environment:**
+2. **Install dependencies:**
     ```sh
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    uv sync
     ```
 
-3. **Install the required packages:**
-    ```sh
-    pip install -r requirements.txt
-    ```
-
-4. **Create a `.env` file:**
+3. **Create a `.env` file:**
    Copy the `.env.example` file to `.env` and fill in your credentials and other necessary environment variables.
     ```sh
     cp .env.example .env
@@ -56,13 +50,13 @@ The application supports syncing your Last.fm library to a PostgreSQL database f
 To sync your Last.fm library scrobbles with your PostgreSQL database, run the following script:
 
 ```sh
-python -m scripts.sync_scrobbles
+uv run python -m scripts.sync_scrobbles
 ```
 
 To sync reference data for artists, albums, and tracks, run:
 
 ```sh
-python -m scripts.sync_ref_data
+uv run python -m scripts.sync_ref_data
 ```
 
 Note that syncing your entire Last.fm library may take a while depending on the number of scrobbles you have.
@@ -73,7 +67,7 @@ Note that syncing your entire Last.fm library may take a while depending on the 
 You can run py-scrobbler in three different ways:
 
    - A Text User Interface (TUI) application (recommended)
-   - A FastAPI web application 
+   - A FastAPI web application
    - A simple command line loop that prints the current song and scrobble status
 
 ### Text User Interface (TUI)
@@ -82,8 +76,12 @@ The TUI application provides an interactive terminal interface with multiple vie
 
 1. **Start the TUI:**
    ```sh
-    python textual_app.py
-    ```
+   ./run.sh
+   ```
+   or
+   ```sh
+   uv run python textual_app.py
+   ```
 
 ### TUI Features
 
@@ -132,14 +130,13 @@ The FastAPI application provides a web API that can be consumed by frontend appl
 
 1. **Start the FastAPI server:**
    ```sh
-    python server.py
-    ```
+   uv run python server.py
+   ```
    or
-    ```sh
-    uvicorn server:app --reload
-    ```
-This starts the FastAPI server on http://localhost:8000.
-<br>
+   ```sh
+   uv run uvicorn server:app --reload
+   ```
+
 API documentation is built-in at http://localhost:8000/docs.
 
 ### Command Line Loop
@@ -148,11 +145,11 @@ The loop script provides a simple command-line output that displays the currentl
 
 1. **Run the loop script:**
     ```sh
-    python loop.py
+    uv run python loop.py
     ```
    Defaults to Apple Music. You can specify which music service to use:
     ```sh
-    python loop.py --integration spotify
+    uv run python loop.py --integration spotify
     ```
 
    Sample output:
@@ -168,14 +165,24 @@ The loop script provides a simple command-line output that displays the currentl
    ```
 
 ## Architecture
-### The application follows a clean architecture pattern with:
-- Services Layer: Integration with Apple Music, Spotify, and Last.fm APIs
-- Repository Layer: Database access and query optimization
-- Models: Pydantic schemas and SQLAlchemy ORM models
-- State Management: Centralized application state with session tracking
-- UI Layer: Textual-based TUI with multiple specialized widgets
+
+The application follows a clean architecture pattern with:
+
+- **Services Layer:** Integration with Apple Music, Spotify, and Last.fm APIs
+- **Repository Layer:** Database access and query optimization
+- **Models:** Pydantic schemas and SQLAlchemy ORM models
+- **State Management:** Centralized application state with session tracking
+- **UI Layer:** Textual-based TUI with multiple specialized widgets
+
+## Tech Stack
+
+- [FastAPI](https://fastapi.tiangolo.com/) — web framework for the API server
+- [SQLAlchemy](https://www.sqlalchemy.org/) + [asyncpg](https://github.com/MagicStack/asyncpg) — async database access
+- [Textual](https://textual.textualize.io/) — TUI framework
+- [pylast](https://github.com/pylast/pylast) — Last.fm API client
+- [spotipy](https://spotipy.readthedocs.io/) — Spotify API client
+- [py-applescript](https://github.com/rdhyee/py-applescript) — Apple Music integration via AppleScript
 
 ## Contributing
 
 Contributions are welcome and encouraged! Please open an issue or submit a pull request for any changes.
-
