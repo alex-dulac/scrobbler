@@ -1,3 +1,4 @@
+from asyncio import shield
 from contextlib import asynccontextmanager
 from typing import Optional, AsyncGenerator
 
@@ -27,6 +28,7 @@ class SessionManager:
             url=url,
             poolclass=AsyncAdaptedQueuePool,
             pool_pre_ping=True,
+            pool_recycle=1800,
         )
 
         self.session_factory = async_sessionmaker(
@@ -52,10 +54,10 @@ session_manager = SessionManager()
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if not session_manager.session_factory:
         raise RuntimeError("Database session factory is not initialized.")
-    async with session_manager.session_factory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    session = session_manager.session_factory()
+    try:
+        yield session
+    finally:
+        await shield(session.close())
 
 
