@@ -33,7 +33,6 @@ class ScrobblerApp(App):
         self.current_view = widgets.TuiViews.LASTFM_USER
         self.db_connected: bool = False
         self.now_playing = widgets.NowPlayingWidget()
-        self.progress_bar = widgets.ScrobbleProgressBar()
         self.track_stats = widgets.TrackStatsWidget()
         self.artist_stats = widgets.ArtistStatsWidget()
         self.session_info = widgets.SessionInfoWidget(self.state.session)
@@ -54,7 +53,6 @@ class ScrobblerApp(App):
     def compose(self) -> ComposeResult:
         top_layout = Container(
             self.now_playing,
-            self.progress_bar,
             id="top-layout"
         )
 
@@ -71,21 +69,33 @@ class ScrobblerApp(App):
         yield self.sync_scrobbles
         yield Footer()
 
-    def update_progress_bar(self) -> None:
-        value = 0.0 if not self.state.current_song else self.state.current_song.scrobble_progress_value
-        text = "" if not self.state.current_song else self.state.current_song.scrobble_progress_text
-        self.progress_bar.update_progress(value, text)
+    def _on_db_connected(self) -> None:
+        self.db_connected = True
+        for widget in self.query(widgets.BaseDbWidget):
+            widget.db_connected = True
+        self.notify("Database connected.")
+
+    @work
+    async def _reconnect_db(self) -> None:
+        for delay in [5, 10, 20, 30, 60]:
+            await asyncio.sleep(delay)
+            try:
+                await session_manager.close_db()
+                await session_manager.init_db()
+                self._on_db_connected()
+                return
+            except Exception:
+                continue
+        self.notify("Database unavailable after several attempts.", severity="error")
 
     async def on_mount(self) -> None:
         # init db
         try:
             await session_manager.init_db()
-            self.db_connected = True
-            for widget in self.query(widgets.BaseDbWidget):
-                widget.db_connected = True
-            self.notify("Database connected successfully.")
-        except Exception as e:
-            self.notify("Database connection failed. Some features might not work as expected.", severity="warning")
+            self._on_db_connected()
+        except Exception:
+            self.notify("Database unavailable — retrying in background.", severity="warning")
+            self._reconnect_db()
 
         # init services
         self.lastfm = await get_lastfm_service()
@@ -93,12 +103,10 @@ class ScrobblerApp(App):
         logger.remove() # downstream loguru interferes with the ui
 
         # widgets etc.
-        self.now_playing.update(self.WAITING)
         self.artist_stats.update(self.WAITING)
         for widget in self.query(widgets.BaseLastfmWidget):
             widget.years = range(self.state.user.registered.year, datetime.today().year + 1)
         self.lastfm_user.refresh_data()
-        self.update_progress_bar()
         self.update_view()
         self.set_interval(1, self.update_display) # primary app functionality
 
@@ -136,11 +144,17 @@ class ScrobblerApp(App):
         self.notify("Thank you for scrobbling. Goodbye!")
 
         if self.state.session.pending:
-            count = await self.state.session.process_pending_scrobbles(self.lastfm)
-            self.notify(f"Processed {count} pending scrobbles.")
+            try:
+                count = await self.state.session.process_pending_scrobbles(self.lastfm)
+                self.notify(f"Processed {count} pending scrobbles.")
+            except Exception:
+                pass
 
         if self.db_connected:
-            await session_manager.close_db()
+            try:
+                await asyncio.wait_for(session_manager.close_db(), timeout=3.0)
+            except Exception:
+                pass
 
         await asyncio.sleep(1)
         self.exit()
@@ -227,9 +241,16 @@ class ScrobblerApp(App):
             self.state.current_song.scrobbled = True
             self.session_info.update_session_info()
             if self.db_connected:
-                repo = ScrobbleRepository()
-                await repo.add_scrobble(scrobbled_track)
-                self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
+                try:
+                    repo = ScrobbleRepository()
+                    await repo.add_scrobble(scrobbled_track)
+                    self.notify(f"Scrobbled and added to database: {scrobbled_track.display_name}")
+                except Exception:
+                    self.notify("Scrobbled to Last.fm but lost database connection — reconnecting.", severity="warning")
+                    self.db_connected = False
+                    for widget in self.query(widgets.BaseDbWidget):
+                        widget.db_connected = False
+                    self._reconnect_db()
             # pause to ensure getting the recent scrobbles from last.fm includes this current one
             await asyncio.sleep(1)
             self.refresh_all()
@@ -244,10 +265,9 @@ class ScrobblerApp(App):
 
         if compare.no_song_playing:
             self.state.current_song = None
-            self.now_playing.update(self.WAITING)
+            self.now_playing.set_track(None)
             self.track_stats.update(self.WAITING)
             self.artist_stats.update(self.WAITING)
-            self.update_progress_bar()
             return
 
         if compare.song_has_changed:
@@ -268,9 +288,7 @@ class ScrobblerApp(App):
                 self.handle_scrobble()
 
         is_pending = self.state.current_song in self.state.session.pending
-        formatted = self.state.current_song.format_for_tui(is_pending)
-        self.now_playing.update(formatted)
-        self.update_progress_bar()
+        self.now_playing.set_track(self.state.current_song, is_pending)
 
 
 if __name__ == "__main__":

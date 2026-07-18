@@ -32,27 +32,16 @@ css = """
     }
     
     #top-layout {
-        layout: horizontal;
         height: auto;
         width: 100%;
-        border: solid white;
-        margin: 1;
-        padding: 1 2;
+        margin: 1 0;
+        padding: 0;
     }
-    
+
     #now-playing {
-        width: 1fr;
+        width: 100%;
         height: auto;
-        padding: 1 2;
-        text-align: center;
-        align: center middle;
-    }
-    
-    #scrobble-progress {
-        width: 1fr;
-        height: auto;
-        padding: 1 2;
-        align: center middle;
+        padding: 0 1;
     }
     
     .controls {
@@ -186,40 +175,111 @@ class RefreshAll(Message):
     pass
 
 
+def _fmt_seconds(seconds: float) -> str:
+    s = int(seconds)
+    return f"{s // 60}:{s % 60:02d}"
+
+
 class NowPlayingWidget(Static):
+    _EQUALIZER_FRAMES = [
+        "▁▂▄▂", "▂▄▆▃", "▃▅▇▄", "▄▆█▅",
+        "▅▇█▆", "▆█▇▅", "▇█▆▄", "█▇▅▃",
+        "▇▅▃▂", "▅▃▂▁", "▃▂▁▂", "▂▁▂▃",
+    ]
+
     def __init__(self):
         super().__init__(id="now-playing")
+        self._track: Track | None = None
+        self._is_pending: bool = False
+        self._frame: int = 0
 
+    def on_mount(self) -> None:
+        self.set_interval(0.25, self._tick)
 
-class ScrobbleProgressBar(Static):
-    def __init__(self):
-        super().__init__(id="scrobble-progress")
-        self.progress = 0.0
-        self.progress_bar = Progress(
-            TextColumn("{task.fields[percentage_text]}", justify="right"),
-            BarColumn(bar_width=None),
-            TextColumn("{task.description}", justify="left"),
-            expand=True
-        )
-        self.task_id = self.progress_bar.add_task("", total=100, completed=0, percentage_text="  0%")
+    def _tick(self) -> None:
+        if self._track and self._track.playing and not self._track.scrobbled:
+            self._frame = (self._frame + 1) % len(self._EQUALIZER_FRAMES)
+            self._redraw()
 
-    def update_progress(self, value, description=""):
-        percentage = min(100, max(0, int(value * 100)))
-        self.progress = value
+    def set_track(self, track: Track | None, is_pending: bool = False) -> None:
+        new_id = (track.name, track.artist) if track else None
+        old_id = (self._track.name, self._track.artist) if self._track else None
+        if new_id != old_id:
+            self._frame = 0
+        self._track = track
+        self._is_pending = is_pending
+        self._redraw()
 
-        # Format percentage text with color markup
-        if percentage == 100:
-            percentage_text = f"[bold green]{percentage:>3.0f}%[/bold green]"
+    def _redraw(self) -> None:
+        if not self._track:
+            self.update(Panel(
+                Text("Waiting for music...", style="dim", justify="center"),
+                border_style="dim",
+                padding=(1, 2),
+            ))
+            return
+
+        track = self._track
+
+        if self._is_pending:
+            border_style = "red"
+            status_label = "⏱ Pending"
+            status_style = "bold red"
+            eq = ""
+        elif track.scrobbled:
+            border_style = "green"
+            status_label = "✓ Scrobbled"
+            status_style = "bold green"
+            eq = ""
+        elif not track.playing:
+            border_style = "white"
+            status_label = "⏸ Paused"
+            status_style = "dim"
+            eq = ""
         else:
-            percentage_text = f"{percentage:>3.0f}%"
+            border_style = "cyan"
+            status_label = "Playing"
+            status_style = "bold cyan"
+            eq = self._EQUALIZER_FRAMES[self._frame]
 
-        self.progress_bar.update(
-            self.task_id,
-            completed=percentage,
-            description=description,
-            percentage_text=percentage_text
-        )
-        self.update(self.progress_bar)
+        content = Text()
+
+        # Track name with optional loved indicator
+        loved = getattr(track, 'loved', None)
+        content.append("❤  " if loved else "   ", style="bold red" if loved else "")
+        content.append(track.clean_name or track.name or "", style="bold white")
+        content.append("\n")
+
+        # Artist / album
+        content.append("   by ", style="dim")
+        content.append(track.artist or "", style="italic cyan")
+        if track.album:
+            content.append("  •  ", style="dim")
+            content.append(track.clean_album or track.album, style="italic green")
+        content.append("\n")
+
+        # Genre + year metadata line (Apple Music only — silently absent otherwise)
+        genre = getattr(track, 'genre', None)
+        year = getattr(track, 'year', None)
+        meta_parts = [p for p in [genre, str(year) if year else None] if p]
+        if meta_parts:
+            content.append("   " + "  •  ".join(meta_parts) + "\n", style="dim")
+
+        # Equalizer + status + progress bar on one line
+        bar_filled = int(track.scrobble_progress_value * 40)
+        bar_empty = 40 - bar_filled
+        bar_color = "green" if track.scrobbled else ("cyan" if track.playing else "dim")
+        time_str = f"{_fmt_seconds(track.time_played)} / {_fmt_seconds(track.scrobble_threshold)}"
+
+        content.append("   ")
+        if eq:
+            content.append(eq + "  ", style=status_style)
+        content.append(status_label + "   ", style=status_style)
+        content.append("█" * bar_filled, style=bar_color)
+        content.append("░" * bar_empty, style="dim")
+        content.append(f"  {time_str}", style="dim")
+
+        self.update(Panel(content, title="[bold] Now Playing [/bold]", border_style=border_style, padding=(0, 1)))
 
 """
 Content Widgets for stats and operations
@@ -246,6 +306,19 @@ class BaseDbWidget(BaseLastfmWidget):
         async with get_db() as session:
             yield ScrobbleRepository(session)
 
+    def _handle_db_error(self) -> None:
+        try:
+            app = self.app
+            if not app.db_connected:
+                return
+            app.db_connected = False
+            for widget in app.query(BaseDbWidget):
+                widget.db_connected = False
+            self.notify("Database connection lost — reconnecting.", severity="warning")
+            app._reconnect_db()
+        except Exception:
+            pass
+
 
 class TrackStatsWidget(BaseDbWidget):
     def __init__(self):
@@ -263,11 +336,15 @@ class TrackStatsWidget(BaseDbWidget):
             self.update("No song selected")
             return
 
-        async with self.get_repo() as repo:
-            scrobbles = await repo.get_scrobbles_like_track(
-                track_name=current_song.clean_name,
-                artist_name=current_song.artist
-            )
+        try:
+            async with self.get_repo() as repo:
+                scrobbles = await repo.get_scrobbles_like_track(
+                    track_name=current_song.clean_name,
+                    artist_name=current_song.artist
+                )
+        except Exception:
+            self._handle_db_error()
+            return
 
         if not scrobbles:
             self.update(f"No previous scrobbles found for: {current_song.display_name}")
@@ -329,11 +406,15 @@ class ArtistStatsWidget(BaseDbWidget):
 
         artist = current_song.artist
 
-        async with self.get_repo() as repo:
-            top_played_tracks = await repo.get_top_tracks_by_artist(artist, limit=30)
-            top_played_albums = await repo.get_top_albums_by_artist(artist)
-            f = ScrobbleFilter(artist_name=artist)
-            all_scrobbles_by_artist = await repo.get_scrobbles(f)
+        try:
+            async with self.get_repo() as repo:
+                top_played_tracks = await repo.get_top_tracks_by_artist(artist, limit=30)
+                top_played_albums = await repo.get_top_albums_by_artist(artist)
+                f = ScrobbleFilter(artist_name=artist)
+                all_scrobbles_by_artist = await repo.get_scrobbles(f)
+        except Exception:
+            self._handle_db_error()
+            return
 
         if not top_played_tracks:
             self.update(f"No scrobbles found for artist: {artist}")
@@ -506,6 +587,7 @@ class ManualScrobbleWidget(BaseDbWidget):
                 await repo.add_and_commit(to_db)
                 self.notify(f"✓ Scrobbled and saved {len(to_db)} tracks to database")
             except Exception as e:
+                self._handle_db_error()
                 self.notify(f"Error saving to database: {str(e)}", severity="error")
         else:
             self.notify("No tracks were successfully scrobbled", severity="warning")
@@ -665,25 +747,29 @@ class WrappedWidget(BaseDbWidget):
 
         self.update(f"Crunching your wrapped data for {year}...")
 
-        async with self.get_repo() as repo:
-            overview = await repo.get_year_overview(year)
+        try:
+            async with self.get_repo() as repo:
+                overview = await repo.get_year_overview(year)
 
-            year_comparison_data = []
-            for year_item in sorted(self.years, reverse=True):
-                total = await repo.get_total_scrobbles_by_year(year_item)
-                artists = await repo.get_unique_artists_by_year(year_item)
-                tracks = await repo.get_unique_tracks_by_year(year_item)
-                albums = await repo.get_unique_albums_by_year(year_item)
-                avg_per_day = total / 365 if total > 0 else 0
+                year_comparison_data = []
+                for year_item in sorted(self.years, reverse=True):
+                    total = await repo.get_total_scrobbles_by_year(year_item)
+                    artists = await repo.get_unique_artists_by_year(year_item)
+                    tracks = await repo.get_unique_tracks_by_year(year_item)
+                    albums = await repo.get_unique_albums_by_year(year_item)
+                    avg_per_day = total / 365 if total > 0 else 0
 
-                year_comparison_data.append({
-                    'year': year_item,
-                    'total': total,
-                    'artists': artists,
-                    'tracks': tracks,
-                    'albums': albums,
-                    'avg_per_day': avg_per_day
-                })
+                    year_comparison_data.append({
+                        'year': year_item,
+                        'total': total,
+                        'artists': artists,
+                        'tracks': tracks,
+                        'albums': albums,
+                        'avg_per_day': avg_per_day
+                    })
+        except Exception:
+            self._handle_db_error()
+            return
 
         header = Text()
         header.append(f"\nTotal Scrobbles: ", style="white")
@@ -948,6 +1034,7 @@ Saved: {saved} new scrobbles to database
             self.post_message(RefreshAll())
 
         except Exception as e:
+            self._handle_db_error()
             error_msg = f"[red]Sync failed: {str(e)}[/red]"
             self.update_display(error_msg)
             self.notify(f"Sync error: {str(e)}", severity="error")
@@ -973,6 +1060,7 @@ Saved: {saved} new scrobbles to database
             self.reset_inputs()
 
         except Exception as e:
+            self._handle_db_error()
             error_msg = f"[red]Reference data sync failed: {str(e)}[/red]"
             self.update_display(error_msg)
             self.notify(f"Sync error: {str(e)}", severity="error")
