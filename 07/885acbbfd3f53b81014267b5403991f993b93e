@@ -1,0 +1,42 @@
+library/textual_widgets.py
+  s_50f6f0a9d1c036::t_e33fe6398945c8 1063
+  s_50f6f0a9d1c036::t_f9c6e815c4d907 37-38,40,42,44
+  s_50f6f0a9d1c036::t_972b586db5bfb8 178-180,183-189,191-194,196-201,203-210,212,214-220,222-238,240-282
+  s_50f6f0a9d1c036::t_7ebd8b5c4744fc 590
+  s_50f6f0a9d1c036::t_125cfeefb53a5b 339-347
+  s_50f6f0a9d1c036::t_4f36830cc9bb6c 309-321
+  s_50f6f0a9d1c036::t_fe0c9754ad07c8 750-772
+  s_50f6f0a9d1c036::t_f351f40840d571 409-417
+  s_50f6f0a9d1c036::t_166dc3b8d3b291 1037
+  s_50f6f0a9d1c036::t_d8cfefdb809ba9 202,211,213
+textual_app.py
+  s_50f6f0a9d1c036::t_70e2fc7d3a9ef2 244-253
+  s_54a71dd736b58f::t_e0efad6d67c117 147-151,154-157
+  s_50f6f0a9d1c036::t_22d9823f3ea373 268
+  s_50f6f0a9d1c036::t_2e9cc70727e284 291
+  s_50f6f0a9d1c036::t_93299138963076 72-89,95-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "07885acbbfd3f53b81014267b5403991f993b93e",
+  "prompts": {},
+  "sessions": {
+    "s_50f6f0a9d1c036": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "683097e2-dc73-4a0c-b2b1-6a1a7c54d088",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Alex Dulac <alex@alexdulac.dev>"
+    },
+    "s_54a71dd736b58f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f8f1df1f-fe32-45c9-aa5e-887117192e8c",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Alex Dulac <alex@alexdulac.dev>"
+    }
+  }
+}
