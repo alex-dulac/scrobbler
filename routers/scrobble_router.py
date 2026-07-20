@@ -1,38 +1,66 @@
-from fastapi import APIRouter, Depends
-from loguru import logger
+import asyncio
 
-from library.state import get_app_state
-from library.dependencies import get_lastfm_service
-from services.lastfm_service import LastFmService
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from library.dependencies import get_scrobbler_runtime
+from services.scrobbler_runtime import ScrobblerRuntime
+
+
+class ScrobblingStatusRequest(BaseModel):
+    enabled: bool
+
 
 scrobble_router = APIRouter()
+_scrobble_status_lock = asyncio.Lock()
 
 
 @scrobble_router.get("/scrobble/status/")
-async def scrobble_status():
-    app_state = await get_app_state()
-    return {"scrobble_enabled": app_state.scrobble_enabled}
+async def scrobble_status(
+    runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
+):
+    snapshot = runtime.snapshot()
+    return {"scrobble_enabled": snapshot.scrobble_enabled}
 
 
-@scrobble_router.post("/scrobble/toggle/")
-async def scrobble_toggle():
-    app_state = await get_app_state()
-    app_state.scrobble_enabled = not app_state.scrobble_enabled
-    logger.info(f"Scrobbling toggled to: {app_state.scrobble_enabled}")
-    return {"scrobble_enabled": app_state.scrobble_enabled}
+@scrobble_router.put("/scrobble/status/")
+async def set_scrobble_status(
+    request: ScrobblingStatusRequest,
+    runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
+):
+    async with _scrobble_status_lock:
+        update = await runtime.set_scrobbling_enabled(request.enabled)
+        return {
+            "scrobble_enabled": request.enabled,
+            "message": update.message,
+        }
+
+
+@scrobble_router.post("/scrobble/toggle/", deprecated=True)
+async def scrobble_toggle(
+    runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
+):
+    async with _scrobble_status_lock:
+        snapshot = runtime.snapshot()
+        enabled = not snapshot.scrobble_enabled
+        update = await runtime.set_scrobbling_enabled(enabled)
+        return {
+            "scrobble_enabled": enabled,
+            "message": update.message,
+        }
 
 
 @scrobble_router.post("/scrobble/")
-async def scrobble_song(lastfm: LastFmService = Depends(get_lastfm_service)):
-    app_state = await get_app_state()
-    result = None
-
-    if await app_state.validate_scrobble_state():
-        app_state.is_scrobbling = True
-        scrobbled_track = await lastfm.scrobble(app_state.current_song)
-        if scrobbled_track:
-            app_state.current_song.scrobbled = True
-            app_state.is_scrobbling = False
-            result = scrobbled_track.model_dump()
-
-    return {"result": result}
+async def scrobble_song(
+    runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
+):
+    command = await runtime.scrobble_current()
+    return {
+        "result": (
+            command.scrobble.model_dump(mode="json")
+            if command.scrobble is not None
+            else None
+        ),
+        "accepted": command.accepted,
+        "message": command.message,
+    }
