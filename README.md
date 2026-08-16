@@ -15,6 +15,9 @@ The application supports syncing your Last.fm library to a PostgreSQL database f
 - **PostgreSQL sync** — import your full Last.fm scrobble history into a local database for deeper analysis
 - **Playback controls** for Apple Music and Spotify directly from the terminal
 
+Spotify is read and controlled through the locally running Spotify Desktop app
+on macOS, so Spotify Web API access and a Premium subscription are not required.
+
 ## Getting Started
 
 ### Prerequisites
