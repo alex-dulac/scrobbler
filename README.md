@@ -67,7 +67,15 @@ Note that syncing your entire Last.fm library may take a while depending on the 
 
 ## Running the Applications
 
-You can run py-scrobbler in three different ways:
+### Flutter macOS desktop
+
+Run `./scripts/run_desktop.sh` after `uv sync` and configuring `.env`. The desktop
+app starts its own Python backend and keeps scrobbling when its window is closed.
+Use the menu bar to reopen the dashboard or explicitly quit. See
+[desktop setup and lifecycle](apps/desktop/README.md) for requirements, external
+backend mode, and current implementation scope.
+
+You can also run py-scrobbler in three other ways:
 
    - A Text User Interface (TUI) application (recommended)
    - A FastAPI web application

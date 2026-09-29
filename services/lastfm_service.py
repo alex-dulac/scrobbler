@@ -16,7 +16,7 @@ LASTFM_API_URL = config.LASTFM_API_URL
 LASTFM_API_KEY = config.LASTFM_API_KEY
 LASTFM_API_SECRET = config.LASTFM_API_SECRET
 LASTFM_USERNAME = config.LASTFM_USERNAME
-LASTFM_PASSWORD_HASH = pylast.md5(config.LASTFM_PASSWORD)
+LASTFM_PASSWORD_HASH = pylast.md5(config.LASTFM_PASSWORD) if config.LASTFM_PASSWORD else None
 
 
 user_params = {
@@ -74,7 +74,7 @@ async def get_lastfm_user() -> LastFmUser:
 def get_lastfm_account_details() -> LastFmUser:
     """Deprecated: Use async version `get_lastfm_user` instead."""
     try:
-        response = requests.get(LASTFM_API_URL, params=user_params)
+        response = requests.get(LASTFM_API_URL, params=user_params, timeout=10)
         user_info = response.json()['user']
     except requests.RequestException as e:
         raise Exception(f"Last.fm API error: {str(e)}")
@@ -96,10 +96,16 @@ class LastFmService(BaseAsyncClient):
             api_key=LASTFM_API_KEY,
             api_secret=LASTFM_API_SECRET,
             username=LASTFM_USERNAME,
-            password_hash=LASTFM_PASSWORD_HASH
         )
         self.user: pylast.User = self.network.get_user(LASTFM_USERNAME)
-        logger.info(f"Last.fm user {LASTFM_USERNAME} successfully authenticated.")
+        logger.info(f"Last.fm user {LASTFM_USERNAME} configured.")
+
+    def _authenticated_call(self, method, **kwargs):
+        if not self.network.session_key:
+            self.network.session_key = pylast.SessionKeyGenerator(self.network).get_session_key(
+                LASTFM_USERNAME, LASTFM_PASSWORD_HASH,
+            )
+        return method(**kwargs)
 
     async def get_user_playcount(self) -> str:
         playcount = await self._run_sync(self.user.get_playcount)
@@ -200,6 +206,7 @@ class LastFmService(BaseAsyncClient):
     async def update_now_playing(self, current_song: Track) -> bool:
         try:
             await self._run_sync(
+                self._authenticated_call,
                 self.network.update_now_playing,
                 artist=current_song.artist,
                 title=current_song.clean_name,
@@ -215,10 +222,12 @@ class LastFmService(BaseAsyncClient):
         artist = track.artist
         title = track.clean_name
         album = track.clean_album
+        scrobbled_at = scrobbled_at or track.listening_started_at
         timestamp = int(scrobbled_at.timestamp()) if scrobbled_at else int(time.time())
 
         try:
             await self._run_sync(
+                self._authenticated_call,
                 self.network.scrobble,
                 artist=artist,
                 title=title,
