@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
@@ -240,6 +240,7 @@ class ScrobblerEngine:
             current_track = self._state.current_song
 
             if not self._same_track(polled_track, current_track):
+                polled_track.listening_started_at = datetime.now(UTC)
                 polled_track.time_played = 0
                 self._state.current_song = polled_track
                 self._state.lastfm_album = None
@@ -267,6 +268,7 @@ class ScrobblerEngine:
                 self._state.scrobble_enabled
                 and current_track.playing
                 and not current_track.scrobbled
+                and current_track not in self._state.session.pending
                 and not self._state.is_scrobbling
             ):
                 current_track.time_played += 1
@@ -286,9 +288,12 @@ class ScrobblerEngine:
         async with self._lock:
             processed = 0
             for track in self._state.session.pending.copy():
+                if track.scrobbled:
+                    self._state.session.remove_pending(track)
+                    continue
                 self._state.is_scrobbling = True
                 try:
-                    scrobbled_track = await self._lastfm.scrobble(track)
+                    scrobbled_track = await self._lastfm.scrobble(track, scrobbled_at=track.listening_started_at)
                     if scrobbled_track is None:
                         continue
 
@@ -322,9 +327,10 @@ class ScrobblerEngine:
         return []
 
     async def _scrobble(self, track: Track) -> list[EngineUpdate]:
+        self._state.session.add_pending(track)
         self._state.is_scrobbling = True
         try:
-            scrobbled_track = await self._lastfm.scrobble(track)
+            scrobbled_track = await self._lastfm.scrobble(track, scrobbled_at=track.listening_started_at)
         except Exception as error:
             self._state.session.add_pending(track)
             return [
@@ -367,9 +373,9 @@ class ScrobblerEngine:
         source_track: Track,
         scrobbled_track: LastFmTrack,
     ) -> tuple[bool | None, list[EngineUpdate]]:
+        source_track.scrobbled = True
         self._state.session.add_scrobble(scrobbled_track)
         self._state.session.remove_pending(source_track)
-        source_track.scrobbled = True
 
         if not self._database_available or self._repository_factory is None:
             return None, []

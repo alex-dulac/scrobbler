@@ -88,8 +88,12 @@ async def state(
     runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
 ):
     snapshot = runtime.snapshot()
+    current_song = None
+    if snapshot.current_song is not None:
+        current_song = snapshot.current_song.model_dump(mode="json")
+        current_song["scrobble_threshold"] = snapshot.current_song.scrobble_threshold
     return {
-        "current_song": snapshot.current_song,
+        "current_song": current_song,
         "lastfm_album": snapshot.lastfm_album,
         "scrobble_enabled": snapshot.scrobble_enabled,
         "is_scrobbling": snapshot.is_scrobbling,

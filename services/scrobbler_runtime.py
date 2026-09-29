@@ -229,6 +229,7 @@ class ScrobblerRuntime:
     async def _poll_loop(self) -> None:
         loop = asyncio.get_running_loop()
         next_deadline = loop.time()
+        next_pending_retry = next_deadline + 30
 
         while not self._stop_requested.is_set():
             async with self._operation_lock:
@@ -237,6 +238,10 @@ class ScrobblerRuntime:
 
                 try:
                     updates = await self._engine.poll_once()
+                    if loop.time() >= next_pending_retry:
+                        if self._engine.state.scrobble_enabled and self._engine.state.session.pending:
+                            await self._engine.process_pending()
+                        next_pending_retry = loop.time() + 30
                 except asyncio.CancelledError:
                     raise
                 except Exception as error:

@@ -1,4 +1,6 @@
 import asyncio
+import os
+from contextlib import suppress
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,10 +18,11 @@ from routers.router import router
 async def lifespan(app: FastAPI):
     db_connected = False
     runtime = None
+    profile_task = None
 
     try:
         try:
-            await session_manager.init_db()
+            await asyncio.wait_for(session_manager.init_db(), timeout=5)
             db_connected = True
             logger.info("Database connection successful.")
         except Exception as error:
@@ -34,23 +37,38 @@ async def lifespan(app: FastAPI):
                 )
 
         runtime = await get_scrobbler_runtime()
+        from core.desktop_storage import state_directory
+        runtime.engine.state.session.attach_pending_store(state_directory() / "pending.json")
+
+        async def load_profile():
+            from services.lastfm_service import get_lastfm_user
+            try:
+                runtime.engine.state.user = await get_lastfm_user()
+            except Exception as error:
+                logger.warning(f"Last.fm profile is unavailable: {error}")
+
+        profile_task = asyncio.create_task(load_profile())
         runtime.engine.set_database_available(db_connected)
         await runtime.start()
         logger.info("Scrobbler runtime started.")
 
         yield
     finally:
+        if profile_task is not None:
+            profile_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await profile_task
         try:
             if runtime is not None:
                 try:
-                    result = await runtime.stop()
+                    result = await runtime.stop(process_pending=os.environ.get("SCROBBLER_MANAGED") != "1")
                     logger.info(
                         "Scrobbler runtime stopped. "
                         f"Processed {result.pending_processed} pending scrobble(s); "
                         f"{result.pending_remaining} remain."
                     )
                 except asyncio.CancelledError:
-                    await runtime.stop()
+                    await runtime.stop(process_pending=os.environ.get("SCROBBLER_MANAGED") != "1")
                     raise
                 except Exception as error:
                     logger.exception(

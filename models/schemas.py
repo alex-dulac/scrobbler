@@ -36,6 +36,7 @@ class Track(BaseModel):
     artist: Optional[str] = None
     album: Optional[str] = None
     playing: bool = False
+    listening_started_at: Optional[datetime] = None
     time_played: int = 0
     duration: float = 0
     scrobbled: bool = False

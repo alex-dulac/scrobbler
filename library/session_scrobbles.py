@@ -1,7 +1,11 @@
+import os
+import tempfile
+from pathlib import Path
+from datetime import UTC, datetime
 from collections import Counter
 from typing import List, Dict
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from models.schemas import LastFmTrack, Track
 from services.lastfm_service import LastFmService
@@ -16,20 +20,63 @@ class SessionScrobbles(BaseModel):
     scrobbles: List[LastFmTrack] = Field(default_factory=list)
     pending: List[Track] = Field(default_factory=list)
     count: int = 0
+    _pending_path: Path | None = PrivateAttr(default=None)
+
+    def attach_pending_store(self, path: Path) -> None:
+        """Load durable listens before polling starts; corrupt files fail closed."""
+        self._pending_path = path
+        if path.exists():
+            self.pending = SessionScrobbles.model_validate_json(path.read_text()).pending
+
+    def _persist_pending(self) -> None:
+        if self._pending_path is None:
+            return
+        path = self._pending_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix="pending-")
+        try:
+            with os.fdopen(descriptor, "w") as output:
+                output.write(self.model_dump_json(include={"pending"}))
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+
 
     def add_scrobble(self, track: LastFmTrack) -> None:
         self.scrobbles.append(track)
         self.count += 1
         logger.info(f"Scrobble Count: {self.count}")
 
+    @staticmethod
+    def _same_listen(first: Track, second: Track) -> bool:
+        return (
+            first.listening_started_at == second.listening_started_at
+            and first.artist == second.artist
+            and first.name == second.name
+            and first.album == second.album
+        )
+
     def add_pending(self, track: Track) -> None:
-        if track not in self.pending:
+        if track.listening_started_at is None:
+            track.listening_started_at = datetime.now(UTC)
+        if not any(self._same_listen(track, pending) for pending in self.pending):
             self.pending.append(track)
+            try:
+                self._persist_pending()
+            except Exception:
+                self.pending.remove(track)
+                raise
             logger.info(f"Added track to pending scrobbles: {track.display_name}")
 
     def remove_pending(self, track: Track) -> None:
-        if track in self.pending:
-            self.pending.remove(track)
+        for pending in self.pending:
+            if self._same_listen(track, pending):
+                self.pending.remove(pending)
+                self._persist_pending()
+                break
 
     async def process_pending_scrobbles(self, lastfm_service: LastFmService) -> int:
         """
@@ -49,7 +96,7 @@ class SessionScrobbles(BaseModel):
         pending_copy = self.pending.copy()
 
         for track in pending_copy:
-            scrobbled_track = await lastfm_service.scrobble(track)
+            scrobbled_track = await lastfm_service.scrobble(track, scrobbled_at=track.listening_started_at)
             if scrobbled_track:
                 self.add_scrobble(scrobbled_track)
                 self.remove_pending(track)

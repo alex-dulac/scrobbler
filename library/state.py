@@ -1,10 +1,9 @@
 from loguru import logger
-from pydantic import HttpUrl, BaseModel
+from pydantic import HttpUrl, BaseModel, Field
 
 from library.integrations import Integration
 from library.session_scrobbles import SessionScrobbles
 from models.schemas import Album, LastFmUser, Track
-from services.lastfm_service import get_lastfm_account_details
 
 
 class AppState(BaseModel):
@@ -15,11 +14,7 @@ class AppState(BaseModel):
     current_song: Track | None = None
     lastfm_album: Album | None = None
     spotify_artist_image: HttpUrl | None = None
-    session: SessionScrobbles = SessionScrobbles()
-
-    def __init__(self):
-        super().__init__()
-        self.user = get_lastfm_account_details()
+    session: SessionScrobbles = Field(default_factory=SessionScrobbles)
 
     async def validate_scrobble_state(self) -> bool:
         if not self.scrobble_enabled:
