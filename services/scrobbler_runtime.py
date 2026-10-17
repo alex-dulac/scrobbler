@@ -8,6 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from library.integrations import Integration, PlaybackAction
+from models.schemas import Track
 from services.scrobbler_engine import (
     EngineUpdate,
     PlaybackResult,
@@ -148,6 +149,17 @@ class ScrobblerRuntime:
             )
             return result
 
+    async def enqueue_manual(self, batch_id: str, tracks: list[Track]) -> int:
+        self._ensure_accepting_commands()
+        return await self._shield_command(self._enqueue_manual(batch_id, tracks))
+
+    async def _enqueue_manual(self, batch_id: str, tracks: list[Track]) -> int:
+        async with self._operation_lock:
+            self._ensure_accepting_commands()
+            count = await self._engine.enqueue_manual(batch_id, tracks)
+            self._publish(RuntimeEventType.COMMAND)
+            return count
+
     async def control_playback(self, action: PlaybackAction) -> PlaybackResult:
         self._ensure_accepting_commands()
         return await self._shield_command(self._control_playback(action))
@@ -239,9 +251,10 @@ class ScrobblerRuntime:
                 try:
                     updates = await self._engine.poll_once()
                     if loop.time() >= next_pending_retry:
+                        processed = 0
                         if self._engine.state.scrobble_enabled and self._engine.state.session.pending:
-                            await self._engine.process_pending()
-                        next_pending_retry = loop.time() + 30
+                            processed = await self._engine.process_pending(max_tracks=1)
+                        next_pending_retry = loop.time() + (1 if processed else 30)
                 except asyncio.CancelledError:
                     raise
                 except Exception as error:

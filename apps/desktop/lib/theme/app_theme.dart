@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppPalette {
-  static const ink = Color(0xFF0D0C0B);
-  static const surface = Color(0xFF161412);
-  static const surfaceRaised = Color(0xFF1D1A17);
-  static const surfaceHighest = Color(0xFF28231F);
-  static const outline = Color(0xFF3A342E);
+  static const ink = Color(0xFF101019);
+  static const surface = Color(0xFF171722);
+  static const surfaceRaised = Color(0xFF20202E);
+  static const surfaceHighest = Color(0xFF2B2B3C);
+  static const outline = Color(0xFF39394B);
 
-  static const paper = Color(0xFFF3EEE6);
-  static const paperMuted = Color(0xFFA9A198);
-  static const paperFaint = Color(0xFF716A63);
+  static const paper = Color(0xFFF5F3FF);
+  static const paperMuted = Color(0xFFB9B6CB);
+  static const paperFaint = Color(0xFF918CA8);
 
-  static const lastFmRed = Color(0xFFD51007);
-  static const lastFmRedDark = Color(0xFF480E12);
-  static const seaGlass = Color(0xFF65D6CC);
-  static const violet = Color(0xFF9585FF);
+  static const lilac = Color(0xFFC4A7FF);
+  static const plum = Color(0xFF39304F);
+  static const lime = Color(0xFFD4ED83);
+  static const peach = Color(0xFFFFAD92);
   static const amber = Color(0xFFF2B761);
   static const success = Color(0xFF72D39A);
   static const error = Color(0xFFFF6B6F);
@@ -107,22 +107,22 @@ abstract final class AppTheme {
     outline: AppPalette.outline,
     textMuted: AppPalette.paperMuted,
     textFaint: AppPalette.paperFaint,
-    nowPlaying: AppPalette.lastFmRed,
-    dataPrimary: AppPalette.seaGlass,
-    dataSecondary: AppPalette.violet,
+    nowPlaying: AppPalette.lilac,
+    dataPrimary: AppPalette.lime,
+    dataSecondary: AppPalette.peach,
     warning: AppPalette.amber,
     success: AppPalette.success,
   );
 
   static ThemeData get dark {
     const colorScheme = ColorScheme.dark(
-      primary: AppPalette.lastFmRed,
-      onPrimary: AppPalette.paper,
-      primaryContainer: AppPalette.lastFmRedDark,
+      primary: AppPalette.lilac,
+      onPrimary: AppPalette.ink,
+      primaryContainer: AppPalette.plum,
       onPrimaryContainer: AppPalette.paper,
-      secondary: AppPalette.seaGlass,
+      secondary: AppPalette.lime,
       onSecondary: AppPalette.ink,
-      tertiary: AppPalette.violet,
+      tertiary: AppPalette.peach,
       onTertiary: AppPalette.ink,
       error: AppPalette.error,
       onError: AppPalette.ink,
@@ -235,7 +235,7 @@ abstract final class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: AppPalette.seaGlass),
+          borderSide: BorderSide(color: AppPalette.lime),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -245,7 +245,7 @@ abstract final class AppTheme {
       navigationRailTheme: const NavigationRailThemeData(
         backgroundColor: AppPalette.surface,
         indicatorColor: AppPalette.surfaceHighest,
-        selectedIconTheme: IconThemeData(color: AppPalette.lastFmRed),
+        selectedIconTheme: IconThemeData(color: AppPalette.lilac),
         unselectedIconTheme: IconThemeData(color: AppPalette.paperFaint),
         selectedLabelTextStyle: TextStyle(
           color: AppPalette.paper,
@@ -260,7 +260,7 @@ abstract final class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppPalette.paper,
+          backgroundColor: AppPalette.lilac,
           foregroundColor: AppPalette.ink,
           disabledBackgroundColor: AppPalette.surfaceHighest,
           disabledForegroundColor: AppPalette.paperFaint,

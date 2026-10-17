@@ -134,9 +134,7 @@ class _ScrobblerAppState extends State<ScrobblerApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       home: _quitting
-          ? const _ConnectionScreen(
-              message: 'Stopping your scrobbler…',
-            )
+          ? const _ConnectionScreen(message: 'Stopping your scrobbler…')
           : _startupError != null
           ? _ConnectionScreen(
               message: 'Could not connect to the scrobbler',
