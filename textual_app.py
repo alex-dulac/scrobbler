@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 from textual.app import App, ComposeResult
@@ -13,8 +14,11 @@ from library.dependencies import get_lastfm_service, get_spotify_service
 from library.integrations import Integration, PlaybackAction
 from library.state import AppState
 from models.schemas import Track
+from repositories.ipod_repo import IPodRepository
 from repositories.scrobble_repo import ScrobbleRepository
 from services.apple_music_service import poll_apple_music, playback_control
+from services.ipod import find_ipod_mount
+from services.ipod_service import capture_plays, get_pending_plays, scrobble_plays
 from services.spotify_service import SpotifyService
 from services.lastfm_service import LastFmService
 import library.textual_widgets as widgets
@@ -22,6 +26,7 @@ import library.textual_widgets as widgets
 
 class ScrobblerApp(App):
     CSS = widgets.css
+    BINDINGS = [("i", "review_ipod", "Review iPod plays")]
     WAITING = "Waiting for music..."
 
     def __init__(self):
@@ -32,6 +37,7 @@ class ScrobblerApp(App):
         self.poll_service = poll_apple_music
         self.current_view = widgets.TuiViews.LASTFM_USER
         self.db_connected: bool = False
+        self.ipod_mount: Path | None = None
         self.now_playing = widgets.NowPlayingWidget()
         self.progress_bar = widgets.ScrobbleProgressBar()
         self.track_stats = widgets.TrackStatsWidget()
@@ -101,6 +107,7 @@ class ScrobblerApp(App):
         self.update_progress_bar()
         self.update_view()
         self.set_interval(1, self.update_display) # primary app functionality
+        self.set_interval(1, self.check_ipod)
 
     @property
     def widget_map(self) -> dict:
@@ -236,6 +243,79 @@ class ScrobblerApp(App):
         else:
             self.state.session.add_pending(self.state.current_song)
         self.state.is_scrobbling = False
+
+    def check_ipod(self) -> None:
+        mount = find_ipod_mount()
+        if mount == self.ipod_mount:
+            return
+
+        self.ipod_mount = mount
+        if mount:
+            self.sync_ipod(mount)
+
+    @work
+    async def sync_ipod(self, mount: Path) -> None:
+        # Apple Music discards the iPod's plays once the iPod is opened there,
+        # so capture them into the database the moment it mounts
+        if not self.db_connected:
+            self.notify("iPod connected, but its plays can't be captured without a database connection.", severity="warning")
+            return
+
+        repo = IPodRepository()
+        try:
+            captured = await capture_plays(mount, repo)
+        except Exception as e:
+            self.notify(f"Failed to read plays from iPod: {e}", severity="error")
+            return
+
+        self.notify(f"iPod connected: captured {captured} new plays.")
+        self.review_ipod_plays(notify_if_empty=False)
+
+    def action_review_ipod(self) -> None:
+        if not self.db_connected:
+            self.notify("Reviewing iPod plays requires a database connection.", severity="warning")
+            return
+        self.review_ipod_plays()
+
+    @work
+    async def review_ipod_plays(self, notify_if_empty: bool = True) -> None:
+        if isinstance(self.screen, widgets.IpodReviewScreen):
+            return
+
+        repo = IPodRepository()
+        try:
+            plays = await get_pending_plays(repo)
+        except Exception as e:
+            self.notify(f"Failed to load iPod plays: {e}", severity="error")
+            return
+
+        if not plays:
+            if notify_if_empty:
+                self.notify("No iPod plays to review.")
+            return
+
+        result = await self.push_screen_wait(widgets.IpodReviewScreen(plays))
+        if not result or not result[1]:
+            return
+
+        action, play_ids = result
+        try:
+            if action == widgets.IpodReviewAction.DISCARD:
+                await repo.discard_plays(play_ids, datetime.now())
+                self.notify(f"Discarded {len(play_ids)} iPod plays.")
+                return
+
+            selected = [play for play in plays if play.id in play_ids]
+            scrobbled, failed = await scrobble_plays(self.lastfm, repo, ScrobbleRepository(), selected)
+        except Exception as e:
+            self.notify(f"Failed to process iPod plays: {e}", severity="error")
+            return
+
+        if scrobbled:
+            self.notify(f"Scrobbled {scrobbled} iPod plays.")
+            self.refresh_all()
+        if failed:
+            self.notify(f"{failed} iPod plays failed to scrobble; press i to retry.", severity="warning")
 
     @work
     async def update_display(self) -> None:
