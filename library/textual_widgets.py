@@ -11,15 +11,18 @@ from rich.progress import Progress, TextColumn, BarColumn
 from rich.table import Table
 from rich.text import Text
 from textual import work
+from textual.app import ComposeResult
 from textual.containers import Container
 from textual.message import Message
-from textual.widgets import Static, Button, Input
+from textual.screen import ModalScreen
+from textual.widgets import Static, Button, Input, SelectionList
+from textual.widgets.selection_list import Selection
 
 from core import config
 from core.database import get_db
 from library.dependencies import get_lastfm_service, get_sync_service
 from library.session_scrobbles import SessionScrobbles
-from models.db import Scrobble
+from models.db import IpodPlay, Scrobble
 from models.schemas import Track, LastFmTrack
 from repositories.filters import ScrobbleFilter
 from repositories.scrobble_repo import ScrobbleRepository
@@ -1094,3 +1097,76 @@ Saved: {saved} new scrobbles to database
             case "clear-sync":
                 self.reset_inputs()
 
+
+
+class IpodReviewAction(str, Enum):
+    SCROBBLE = "scrobble"
+    DISCARD = "discard"
+
+
+class IpodReviewScreen(ModalScreen[tuple[IpodReviewAction, list[int]] | None]):
+    """
+    Lists captured iPod plays for approval. Scrobble and discard act on the checked plays;
+    unchecked plays stay pending for the next review.
+    """
+    DEFAULT_CSS = """
+    IpodReviewScreen {
+        align: center middle;
+    }
+
+    #ipod-review {
+        width: 90%;
+        height: 80%;
+        border: solid white;
+        padding: 1 2;
+        background: $surface;
+    }
+
+    #ipod-review SelectionList {
+        height: 1fr;
+    }
+    """
+    BINDINGS = [("escape", "dismiss", "Later")]
+
+    def __init__(self, plays: list[IpodPlay]):
+        super().__init__()
+        self.plays = plays
+
+    def compose(self) -> ComposeResult:
+        selections = [Selection(self.format_play(play), play.id, True) for play in self.plays]
+        yield Container(
+            Static(f"{len(self.plays)} iPod plays to review (~ marks an estimated time)", classes="header"),
+            SelectionList[int](*selections),
+            Container(
+                Button("Scrobble selected", id="ipod-scrobble", variant="success"),
+                Button("Discard selected", id="ipod-discard", variant="error"),
+                Button("Later", id="ipod-later"),
+                classes="controls",
+            ),
+            id="ipod-review",
+        )
+
+    @staticmethod
+    def format_play(play: IpodPlay) -> Text:
+        text = Text()
+        text.append(f"{play.played_at.astimezone():%a %b %d %H:%M}", style="dim")
+        text.append("~ " if play.played_at_estimated else "  ", style="dim")
+        text.append(play.track_name, style="bold white")
+        text.append(" by ", style="dim")
+        text.append(play.artist_name, style="italic cyan")
+        if play.album_name:
+            text.append(" • ", style="dim")
+            text.append(play.album_name, style="italic green")
+        return text
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        selected = self.query_one(SelectionList).selected
+
+        match event.button.id:
+            case "ipod-scrobble":
+                self.dismiss((IpodReviewAction.SCROBBLE, selected))
+            case "ipod-discard":
+                self.dismiss((IpodReviewAction.DISCARD, selected))
+            case "ipod-later":
+                self.dismiss(None)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -8,8 +8,8 @@ class BaseTable(Base):
     __abstract__ = True
 
     id = Column(Integer, primary_key=True, index=True)
-    created_at = Column(DateTime, default=datetime.now(), nullable=False)
-    updated_at = Column(DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
 class Scrobble(BaseTable):
     __tablename__ = "scrobbles"
@@ -17,10 +17,35 @@ class Scrobble(BaseTable):
     track_name = Column(String, index=True, nullable=False)
     artist_name = Column(String, index=True, nullable=False)
     album_name = Column(String, nullable=True)
-    scrobbled_at = Column(DateTime, default=datetime.now(), nullable=False)
+    scrobbled_at = Column(DateTime, default=datetime.now, nullable=False)
 
     def __repr__(self):
         return f"<Scrobble(track_name='{self.track_name}', artist_name='{self.artist_name}')>"
+
+
+class IpodPlay(BaseTable):
+    """
+    A single play captured from the iPod's Play Counts file, kept until it is scrobbled.
+    Unique per (dbid, generation, play_number) so reading the same Play Counts file on
+    a later connection doesn't capture its plays twice.
+    """
+    __tablename__ = "ipod_plays"
+    __table_args__ = (UniqueConstraint("dbid", "generation", "play_number"),)
+
+    dbid = Column(String, index=True, nullable=False)  # hex of the iPod's 64-bit track id
+    generation = Column(String, nullable=False)
+    play_number = Column(Integer, nullable=False)
+    track_name = Column(String, nullable=False)
+    artist_name = Column(String, nullable=False)
+    album_name = Column(String, nullable=True)
+    duration = Column(Integer, nullable=True)  # duration in milliseconds
+    played_at = Column(DateTime(timezone=True), index=True, nullable=False)
+    played_at_estimated = Column(Boolean, default=False, nullable=False)
+    scrobbled_at = Column(DateTime, nullable=True)
+    discarded_at = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<IpodPlay(track_name='{self.track_name}', artist_name='{self.artist_name}', played_at='{self.played_at}')>"
 
 """
 NOTE: The following tables are designed based on the Last.fm API responses and may not cover all possible fields.
@@ -48,8 +73,8 @@ class Track(BaseTable):
     user_playcount = Column(Integer, nullable=True)
     listener_count = Column(Integer, nullable=True)
     listener_playcount = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.now(), nullable=False)
-    updated_at = Column(DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     def __repr__(self):
         return f"<Track(title='{self.title}', artist_name='{self.artist_name}')>"
