@@ -37,7 +37,8 @@ This is a development application; Python is not yet bundled into the `.app`.
 - Explicit quit sends SIGTERM and waits up to 15 seconds before terminating an
   unresponsive child. The backend also exits when its parent input pipe closes.
 - Pending listens are atomically saved before submission, retried every 30
-  seconds while scrobbling is enabled, and retain their original listening time.
+  seconds while scrobbling is enabled, and retain their original listening time. The retry loop drains one item at a
+  time, one second apart after success, with a 30-second delay after failure.
   Managed quit leaves pending items for the next launch instead of waiting for
   network retries.
 
@@ -81,9 +82,60 @@ flutter build macos --debug --no-pub
 Tests use fake playback and Last.fm clients; the backend lifecycle test starts a
 real loopback subprocess with a fake ASGI application. No live scrobbles are sent.
 
-## Remaining application work
+## Listening library and album scrobbling
 
-The intended scope includes the full TUI experience: long-term listening history,
-artist and album statistics, manual album scrobbling, and yearly Wrapped. This
-implementation establishes the background lifecycle and connected dashboard;
-those additional screens and their API contracts are still to be implemented.
+The dashboard now includes:
+
+- **Listening:** album artwork, source and playback controls, scrobble progress,
+  and inline track, album, and artist statistics. Counts, first/latest listens,
+  recent timestamps, album track rankings, and artist yearly listening are visible
+  without opening detail pages. History refreshes when the recording changes or
+  the session gains a scrobble, with a manual refresh for external library syncs.
+- **History:** paginated search across tracks, artists, and albums in PostgreSQL.
+- **Artist detail:** yearly listening counts and favorite albums/tracks.
+- **Wrapped:** selectable years, monthly charts, and top artists/albums/tracks.
+  Track counts use artist + title identity; album counts use artist + album.
+- **Add a listen:** search an album and specify when you finished it, review the
+  track timeline, then explicitly queue the reviewed album. No submission happens
+  during preview. Tracks of 30 seconds or less are shown but excluded; missing
+  durations produce an error instead of guessed timestamps.
+- **Session, Profile, Settings:** pending/submitted listens, lifetime Last.fm
+  counts, connection state, and source selection.
+
+History, artist detail, and Wrapped use the existing synced database, not the
+entire Last.fm account automatically. If it is unavailable, these pages show an
+error and retry action. Configure PostgreSQL and restart the backend to reconnect.
+Use the existing `scripts.sync_scrobbles` workflow to import older listening data.
+
+Visited tabs retain their search, selected page/year, and scroll position until
+the app closes. Library responses share a bounded in-memory cache (80 entries,
+one-minute freshness) scoped to the backend connection. Returning to a tab reuses
+fresh results; stale results remain visible while refreshing. New session
+scrobbles, database availability changes, and reconnections invalidate cached
+results. Refresh buttons bypass freshness, including after an external library
+sync. Failed refreshes retain any available results and offer a retry. The cache
+is not persisted across app restarts.
+Dates in the library retain the database's existing local, timezone-naive convention.
+
+Manual previews expire after 30 minutes. A persisted receipt makes submitting the
+same preview safe to retry, including after a backend restart. Unsubmitted previews
+must be recreated after restart. Submissions remain queued while scrobbling is
+paused. Last.fm acceptance is checked explicitly; ignored or rejected tracks stay
+pending. There is not yet a UI for editing/removing a rejected queued listen.
+
+The interface uses restrained lilac accents, compact album artwork, inline data
+panels, direct labels, and a persistent player. Duration, release year, genre,
+and track number appear when supplied by the current player. Artwork failure falls back to an illustrated record sleeve. To render
+screenshots with synthetic data and local macOS fonts, run
+`flutter test tool/render_preview.dart` from this directory; outputs are in
+`build/previews/`. These fixtures are not part of the live app.
+
+Remaining work includes sync controls in the desktop UI, queue editing/removal,
+and repeat/transient-playback detection.
+Python packaging, launch-at-login, and distribution remain separate work.
+
+The Listening view includes aligned annual track, album, and artist charts.
+Each row is scaled independently, shows exact counts and peak years, fills gaps
+with zero counts, and labels the current year as year to date. Long timelines
+scroll horizontally. Command confirmations clear after four seconds; command
+failures stay visible for eight seconds. Connection errors remain until recovery.

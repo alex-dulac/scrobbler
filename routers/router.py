@@ -11,6 +11,9 @@ from routers.scrobble_router import scrobble_router
 from routers.runtime_router import runtime_router
 from routers.sync_router import sync_router
 from routers.user_router import user_router
+from routers.library_router import library_router
+from routers.manual_router import manual_router
+from routers.artwork_router import artwork_router
 from services.apple_music_service import get_current_track_artwork_data
 from services.scrobbler_runtime import ScrobblerRuntime
 
@@ -54,6 +57,9 @@ router.include_router(spotify_router)
 router.include_router(runtime_router)
 router.include_router(sync_router)
 router.include_router(user_router)
+router.include_router(library_router)
+router.include_router(manual_router)
+router.include_router(artwork_router)
 
 
 @router.get("/poll-song/")

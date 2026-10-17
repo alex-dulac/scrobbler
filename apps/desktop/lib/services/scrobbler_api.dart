@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import '../models/scrobbler_state.dart';
 
 class ApiException implements Exception {
-  const ApiException(this.message);
+  const ApiException(this.message, {this.statusCode});
   final String message;
+  final int? statusCode;
   @override
   String toString() => message;
 }
@@ -26,6 +27,7 @@ class ScrobblerApi {
     String method,
     String path, [
     Map<String, dynamic>? body,
+    Duration timeout = const Duration(seconds: 8),
   ]) async {
     final request = http.Request(method, baseUrl.resolve(path));
     request.headers.addAll({
@@ -36,12 +38,22 @@ class ScrobblerApi {
     final response = await _client
         .send(request)
         .then(http.Response.fromStream)
-        .timeout(const Duration(seconds: 8));
+        .timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      String? detail;
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map && body['detail'] is String) {
+          detail = body['detail'] as String;
+        }
+      } on FormatException {
+        // Proxies can return HTML errors; use the status fallback below.
+      }
       throw ApiException(
         response.statusCode == 401 || response.statusCode == 403
             ? 'Backend authentication failed. Check the API token.'
-            : 'Backend request failed (${response.statusCode}).',
+            : detail ?? 'Backend request failed (${response.statusCode}).',
+        statusCode: response.statusCode,
       );
     }
     final result = jsonDecode(response.body);

@@ -11,6 +11,7 @@ from core import config
 from library.utils import clean_up_title, lastfm_friendly
 from models.schemas import LastFmUser, LastFmTrack, TopItem, Artist, Album, Track, SimilarTrack
 from services.base_async_client import BaseAsyncClient
+from services.lastfm_submission import SubmissionError, submit_scrobble
 
 LASTFM_API_URL = config.LASTFM_API_URL
 LASTFM_API_KEY = config.LASTFM_API_KEY
@@ -100,11 +101,15 @@ class LastFmService(BaseAsyncClient):
         self.user: pylast.User = self.network.get_user(LASTFM_USERNAME)
         logger.info(f"Last.fm user {LASTFM_USERNAME} configured.")
 
-    def _authenticated_call(self, method, **kwargs):
+    def _get_session_key(self):
         if not self.network.session_key:
             self.network.session_key = pylast.SessionKeyGenerator(self.network).get_session_key(
                 LASTFM_USERNAME, LASTFM_PASSWORD_HASH,
             )
+        return self.network.session_key
+
+    def _authenticated_call(self, method, **kwargs):
+        self._get_session_key()
         return method(**kwargs)
 
     async def get_user_playcount(self) -> str:
@@ -226,14 +231,19 @@ class LastFmService(BaseAsyncClient):
         timestamp = int(scrobbled_at.timestamp()) if scrobbled_at else int(time.time())
 
         try:
-            await self._run_sync(
-                self._authenticated_call,
-                self.network.scrobble,
+            session_key = await self._run_sync(self._get_session_key)
+            result = await submit_scrobble(
+                api_key=LASTFM_API_KEY,
+                api_secret=LASTFM_API_SECRET,
+                session_key=session_key,
                 artist=artist,
                 title=title,
                 timestamp=timestamp,
-                album=album
+                album=album,
             )
+            if not result.accepted:
+                logger.warning(f"Last.fm did not accept {track.display_name}: {result.message}")
+                return None
             logger.info(f"Scrobbled to LastFm: {track.display_name}")
             return LastFmTrack(
                 name=title,
@@ -243,7 +253,7 @@ class LastFmService(BaseAsyncClient):
                 clean_album=album,
                 scrobbled_at=datetime.fromtimestamp(int(timestamp)),
             )
-        except pylast.PyLastError as e:
+        except (pylast.PyLastError, httpx.HTTPError, SubmissionError) as e:
             logger.error(f"Failed to scrobble to Last.fm: {e}")
             return None
 

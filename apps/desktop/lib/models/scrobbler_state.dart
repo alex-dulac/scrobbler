@@ -6,6 +6,9 @@ class ScrobbleTrack {
     : name = (json['clean_name'] ?? json['name'] ?? 'Unknown track').toString(),
       artist = (json['artist'] ?? 'Unknown artist').toString(),
       album = (json['clean_album'] ?? json['album'] ?? '').toString(),
+      genre = (json['genre'] ?? '').toString(),
+      releaseYear = _positiveInteger(json['year']),
+      trackNumber = _positiveInteger(json['track_number']),
       playing = json['playing'] == true,
       scrobbled = json['scrobbled'] == true,
       elapsed = (json['time_played'] as num?)?.toDouble() ?? 0,
@@ -13,11 +16,17 @@ class ScrobbleTrack {
       scrobbleThreshold = (json['scrobble_threshold'] as num?)?.toDouble(),
       submittedAt = DateTime.tryParse('${json['scrobbled_at']}');
 
-  final String name, artist, album;
+  final String name, artist, album, genre;
+  final int? releaseYear, trackNumber;
   final bool playing, scrobbled;
   final double elapsed, duration;
   final double? scrobbleThreshold;
   final DateTime? submittedAt;
+
+  static int? _positiveInteger(Object? value) {
+    final number = value is num ? value.toInt() : int.tryParse('$value');
+    return number != null && number > 0 ? number : null;
+  }
 }
 
 class ListenerProfile {

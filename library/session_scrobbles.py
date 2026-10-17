@@ -20,13 +20,16 @@ class SessionScrobbles(BaseModel):
     scrobbles: List[LastFmTrack] = Field(default_factory=list)
     pending: List[Track] = Field(default_factory=list)
     count: int = 0
+    manual_batches: dict[str, int] = Field(default_factory=dict)
     _pending_path: Path | None = PrivateAttr(default=None)
 
     def attach_pending_store(self, path: Path) -> None:
         """Load durable listens before polling starts; corrupt files fail closed."""
         self._pending_path = path
         if path.exists():
-            self.pending = SessionScrobbles.model_validate_json(path.read_text()).pending
+            stored = SessionScrobbles.model_validate_json(path.read_text())
+            self.pending = stored.pending
+            self.manual_batches = stored.manual_batches
 
     def _persist_pending(self) -> None:
         if self._pending_path is None:
@@ -36,7 +39,7 @@ class SessionScrobbles(BaseModel):
         descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix="pending-")
         try:
             with os.fdopen(descriptor, "w") as output:
-                output.write(self.model_dump_json(include={"pending"}))
+                output.write(self.model_dump_json(include={"pending", "manual_batches"}))
                 output.flush()
                 os.fsync(output.fileno())
             os.replace(temporary, path)
@@ -70,6 +73,22 @@ class SessionScrobbles(BaseModel):
                 self.pending.remove(track)
                 raise
             logger.info(f"Added track to pending scrobbles: {track.display_name}")
+
+    def add_pending_batch(self, batch_id: str, tracks: list[Track]) -> int:
+        """Commit the batch and idempotency receipt in a single atomic file replacement."""
+        if batch_id in self.manual_batches:
+            return self.manual_batches[batch_id]
+        copies = [track.model_copy(deep=True) for track in tracks]
+        previous = self.pending.copy()
+        self.pending.extend(copies)
+        self.manual_batches[batch_id] = len(tracks)
+        try:
+            self._persist_pending()
+        except Exception:
+            self.pending = previous
+            self.manual_batches.pop(batch_id, None)
+            raise
+        return len(tracks)
 
     def remove_pending(self, track: Track) -> None:
         for pending in self.pending:

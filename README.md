@@ -71,7 +71,8 @@ Note that syncing your entire Last.fm library may take a while depending on the 
 
 Run `./scripts/run_desktop.sh` after `uv sync` and configuring `.env`. The desktop
 app starts its own Python backend and keeps scrobbling when its window is closed.
-Use the menu bar to reopen the dashboard or explicitly quit. See
+The dashboard includes searchable history, artist statistics, yearly Wrapped,
+and reviewed manual album scrobbling. Use the menu bar to reopen it or explicitly quit. See
 [desktop setup and lifecycle](apps/desktop/README.md) for requirements, external
 backend mode, and current implementation scope.
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/scrobbler_state.dart';
 import '../services/scrobbler_api.dart';
+import '../services/library_cache.dart';
 
 class ScrobblerController extends ChangeNotifier {
   ScrobblerController({required this.api});
@@ -12,6 +13,8 @@ class ScrobblerController extends ChangeNotifier {
   String? error;
   String? notice;
   Timer? _timer;
+  Timer? _noticeTimer;
+  int _noticeGeneration = 0;
   bool _running = false;
   bool _disposed = false;
   int _generation = 0;
@@ -39,7 +42,17 @@ class ScrobblerController extends ChangeNotifier {
     try {
       final snapshot = await api.fetchState();
       if (_disposed || generation != _generation) return;
+      final previous = state;
+      final libraryChanged =
+          previous != null &&
+          (!connected ||
+              previous.databaseAvailable != snapshot.databaseAvailable ||
+              !listEquals(
+                previous.scrobbles.map(_scrobbleIdentity).toList(),
+                snapshot.scrobbles.map(_scrobbleIdentity).toList(),
+              ));
       state = snapshot;
+      if (libraryChanged) LibraryCache.forApi(api).invalidate();
       connected = true;
       error = null;
     } catch (exception) {
@@ -52,6 +65,29 @@ class ScrobblerController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  static String _scrobbleIdentity(ScrobbleTrack track) =>
+      '${track.artist}\u0000${track.name}\u0000${track.album}\u0000${track.submittedAt}';
+
+  void _clearNotice() {
+    _noticeTimer?.cancel();
+    _noticeTimer = null;
+    _noticeGeneration++;
+    notice = null;
+  }
+
+  void _showNotice(String? message, {bool failed = false}) {
+    _clearNotice();
+    notice = message;
+    if (message == null) return;
+    final generation = _noticeGeneration;
+    _noticeTimer = Timer(Duration(seconds: failed ? 8 : 4), () {
+      if (_disposed || generation != _noticeGeneration) return;
+      _clearNotice();
+      notifyListeners();
+    });
+    notifyListeners();
+  }
+
   Future<void> _command(
     String method,
     String path, [
@@ -60,20 +96,23 @@ class ScrobblerController extends ChangeNotifier {
     if (busy || !connected || _disposed) return;
     final generation = _generation;
     busy = true;
-    notice = null;
+    _clearNotice();
     notifyListeners();
     try {
       final result = await api.request(method, path, body);
       if (_disposed || generation != _generation) return;
-      notice = result['message'] as String?;
+      _showNotice(result['message'] as String?);
       await _refresh;
       if (_disposed || generation != _generation) return;
       await refresh();
     } catch (exception) {
       if (!_disposed && generation == _generation) {
-        notice = exception is ApiException
-            ? exception.message
-            : 'Command failed. Please try again.';
+        _showNotice(
+          exception is ApiException
+              ? exception.message
+              : 'Command failed. Please try again.',
+          failed: true,
+        );
       }
     } finally {
       busy = false;
@@ -93,6 +132,7 @@ class ScrobblerController extends ChangeNotifier {
     _running = false;
     _generation++;
     _timer?.cancel();
+    _clearNotice();
   }
 
   @override

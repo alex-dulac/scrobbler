@@ -7,6 +7,7 @@ class MainFlutterWindow: NSWindow, NSWindowDelegate {
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    self.minSize = NSSize(width: 760, height: 540)
     self.isReleasedWhenClosed = false
     self.delegate = self
 

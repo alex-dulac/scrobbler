@@ -95,6 +95,7 @@ class ScrobblerEngine:
         self._repository_factory = repository_factory
         self._database_available = database_available
         self._lock = asyncio.Lock()
+        self._next_pending_track: Track | None = None
 
     @property
     def state(self) -> AppState:
@@ -284,10 +285,29 @@ class ScrobblerEngine:
 
             return updates
 
-    async def process_pending(self) -> int:
+    async def enqueue_manual(self, batch_id: str, tracks: list[Track]) -> int:
         async with self._lock:
+            return self._state.session.add_pending_batch(batch_id, tracks)
+
+    async def process_pending(self, *, max_tracks: int | None = None) -> int:
+        if max_tracks is not None and max_tracks < 1:
+            raise ValueError("max_tracks must be greater than zero")
+        async with self._lock:
+            if not self._state.scrobble_enabled:
+                return 0
             processed = 0
-            for track in self._state.session.pending.copy():
+            tracks = self._state.session.pending.copy()
+            if max_tracks is not None and tracks:
+                # Rotate only bounded retries: one permanently rejected listen must
+                # not prevent later queued listens from reaching Last.fm.
+                start = next((index for index, track in enumerate(tracks)
+                              if track is self._next_pending_track), 0)
+                ordered = tracks[start:] + tracks[:start]
+                tracks = ordered[:max_tracks]
+                self._next_pending_track = ordered[len(tracks) % len(ordered)]
+            elif max_tracks is None:
+                self._next_pending_track = None
+            for track in tracks:
                 if track.scrobbled:
                     self._state.session.remove_pending(track)
                     continue
