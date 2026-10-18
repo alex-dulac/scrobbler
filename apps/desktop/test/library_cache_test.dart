@@ -65,6 +65,39 @@ void main() {
     },
   );
 
+  test('targeted invalidation refetches only affected paths', () async {
+    final requests = <String>[];
+    final responses = <Completer<http.Response>>[];
+    final api = apiFor((request) {
+      requests.add(request.url.path);
+      if (request.url.path == '/slow') {
+        final response = Completer<http.Response>();
+        responses.add(response);
+        return response.future;
+      }
+      return Future.value(data(requests.length));
+    });
+    final cache = LibraryCache(api);
+    var notified = 0;
+    cache.addListener(() => notified++);
+    await cache.get('/a');
+    await cache.get('/b');
+    final slow = cache.get('/slow');
+    await Future<void>.delayed(Duration.zero);
+    cache.invalidateWhere((path) => path.path != '/b');
+    expect(notified, 1);
+    // Stale responses stay available for display while refetching.
+    expect(cache.peek('/a')!['count'], 1);
+    await cache.get('/a');
+    await cache.get('/b');
+    expect(requests, ['/a', '/b', '/slow', '/a']);
+    // The in-flight request was invalidated, so it can't fill the cache.
+    responses.single.complete(data(7));
+    await slow;
+    expect(cache.peek('/slow'), isNull);
+    api.close();
+  });
+
   test('failed refresh retains cached result and is retryable', () async {
     var fail = false;
     var calls = 0;

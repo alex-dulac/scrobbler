@@ -81,21 +81,44 @@ void main() {
     controller.dispose();
   });
   test(
-    'library invalidation follows scrobbles and reconnects, not playback ticks',
+    'library invalidation waits for committed writes and targets them',
     () async {
       var current = Map<String, dynamic>.from(snapshot);
       var fail = false;
+      final library = <String>[];
       final controller = controllerFor(
-        MockClient(
-          (_) async => http.Response(jsonEncode(current), fail ? 503 : 200),
-        ),
+        MockClient((request) async {
+          if (request.url.path.startsWith('/library/')) {
+            library.add(
+              request.url.toString().substring(request.url.origin.length),
+            );
+            return http.Response('{}', 200);
+          }
+          return http.Response(jsonEncode(current), fail ? 503 : 200);
+        }),
       );
       var invalidations = 0;
       final cache = LibraryCache.forApi(controller.api);
       void changed() => invalidations++;
       cache.addListener(changed);
+      const paths = [
+        '/library/artists/?artist=Artist',
+        '/library/artists/?artist=Other',
+        '/library/wrapped/2026/',
+        '/library/wrapped/2024/',
+        '/library/history/?query=&page=2&page_size=40',
+      ];
+      Future<List<String>> refetched() async {
+        library.clear();
+        for (final path in paths) {
+          await cache.get(path);
+        }
+        return [...library];
+      }
+
       await controller.refresh();
       await controller.refresh();
+      expect(await refetched(), paths);
       expect(invalidations, 0);
       current = {
         ...current,
@@ -105,23 +128,37 @@ void main() {
             {
               'name': 'Submitted',
               'artist': 'Artist',
-              'scrobbled_at': '2026-09-29T12:00:00Z',
+              'scrobbled_at': '2026-09-29T12:00:00',
             },
           ],
         },
       };
+      // The session list gains the scrobble before its database write.
+      await controller.refresh();
+      expect(invalidations, 0);
+      current = {...current, 'library_revision': 1};
       await controller.refresh();
       expect(invalidations, 1);
+      expect(await refetched(), [
+        '/library/artists/?artist=Artist',
+        '/library/wrapped/2026/',
+        '/library/history/?query=&page=2&page_size=40',
+      ]);
       await controller.refresh();
       expect(invalidations, 1);
+      // A write the session list doesn't explain, e.g. a sync.
+      current = {...current, 'library_revision': 2};
+      await controller.refresh();
+      expect(invalidations, 2);
+      expect(await refetched(), paths);
       fail = true;
       await controller.refresh();
       fail = false;
       await controller.refresh();
-      expect(invalidations, 2);
+      expect(invalidations, 3);
       current = {...current, 'database_available': true};
       await controller.refresh();
-      expect(invalidations, 3);
+      expect(invalidations, 4);
       cache.removeListener(changed);
       controller.dispose();
     },

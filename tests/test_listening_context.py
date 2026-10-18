@@ -1,5 +1,7 @@
 """Current listening context contracts, without a production database."""
+import asyncio
 import unittest
+from contextlib import asynccontextmanager
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -11,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 
 from library.dependencies import get_scrobbler_engine
 from models.library_schemas import ListeningContext
+from repositories.listening_cache import listening_cache
 from repositories.listening_repo import ListeningRepository
 from routers.library_router import get_listening_repository, library_router
 
@@ -21,8 +24,9 @@ def empty_context():
                   'first_scrobbled_at': None, 'last_scrobbled_at': None,
                   'years': [], 'recent_scrobbles': []},
         'album': None,
-        'artist': {'artist': 'Artist', 'total_scrobbles': 0, 'years': [],
-                   'top_albums': [], 'top_tracks': []},
+        'artist': {'artist': 'Artist', 'total_scrobbles': 0, 'rank': None,
+                   'first_scrobbled_at': None, 'last_scrobbled_at': None,
+                   'first_track': None, 'years': [], 'top_albums': [], 'top_tracks': []},
     }
 
 
@@ -84,6 +88,10 @@ class ContextApiTests(unittest.TestCase):
 
 
 class ContextQueryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        listening_cache.invalidate()
+        self.addCleanup(listening_cache.invalidate)
+
     async def test_queries_are_exact_scoped_bounded_and_share_session(self):
         statements = []
         timestamp = datetime(2026, 9, 29, 12)
@@ -113,7 +121,10 @@ class ContextQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context['album']['unique_tracks'], 2)
         self.assertEqual(context['track']['recent_scrobbles'], [timestamp])
         self.assertEqual(context['album']['years'], [{'year': 2026, 'count': 4}])
-        self.assertEqual(session.execute.await_count, 10)
+        self.assertEqual(session.execute.await_count, 11)
+        self.assertIsNone(context['artist']['rank'])
+        # The artist rank scans every scrobble and isn't shown beside playback.
+        self.assertFalse(any('HAVING' in str(statement) for statement in statements))
         for statement in statements:
             compiled = statement.compile(dialect=postgresql.dialect())
             sql = str(compiled)
@@ -135,6 +146,33 @@ class ContextQueryTests(unittest.IsolatedAsyncioTestCase):
         album_year_sql = str(statements[5])
         self.assertIn('GROUP BY EXTRACT(year FROM scrobbles.scrobbled_at)', album_year_sql)
         self.assertIn('ORDER BY year', album_year_sql)
+
+    async def test_pooled_queries_run_concurrently(self):
+        in_flight = peak = 0
+
+        async def execute(statement):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0.01)
+            in_flight -= 1
+            result = Mock()
+            rows = []
+            if 'AS first_scrobbled_at' in str(statement):
+                rows = [{'total_scrobbles': 0, 'first_scrobbled_at': None,
+                         'last_scrobbled_at': None, 'unique_tracks': 0}]
+            result.mappings.return_value.all.return_value = rows
+            return result
+
+        @asynccontextmanager
+        async def get_db():
+            yield SimpleNamespace(execute=execute)
+
+        with patch('repositories.base.get_db', get_db):
+            context = await ListeningRepository().context('Artist', 'Song', 'Album')
+        ListeningContext.model_validate(context)
+        # Each query has its own pooled session, so none waits on another.
+        self.assertEqual(peak, 11)
 
     async def test_unknown_track_has_zero_counts_and_null_dates(self):
         async def execute(statement):

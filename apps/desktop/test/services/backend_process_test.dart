@@ -14,7 +14,13 @@ void main() {
         'scrobbler-backend-test-',
       );
       await Directory('${project.path}/.venv/bin').create(recursive: true);
-      await Link('${project.path}/.venv/bin/python').create('/usr/bin/python3');
+      // /usr/bin/python3 can be an Xcode shim that dispatches on its invoked
+      // name, so a link called `python` must target the real interpreter.
+      final python = Process.runSync('/usr/bin/python3', [
+        '-c',
+        'import sys; print(sys.executable)',
+      ]).stdout.toString().trim();
+      await Link('${project.path}/.venv/bin/python').create(python);
       backend = BackendProcess(
         projectDirectory: project,
         startupTimeout: const Duration(seconds: 3),

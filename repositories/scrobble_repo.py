@@ -14,6 +14,7 @@ from models.db import (
 from models.schemas import LastFmTrack
 from repositories.base import BaseRepository
 from repositories.filters import ScrobbleFilter, build_query, to_lower, like_lower
+from repositories.listening_cache import listening_cache
 
 
 class ScrobbleRepository(BaseRepository):
@@ -24,6 +25,13 @@ class ScrobbleRepository(BaseRepository):
 
     def __init__(self, db: Optional[AsyncSession] = None):
         super().__init__(db)
+
+    async def add_and_commit(self, objs: list[Any] | Any) -> None:
+        try:
+            await super().add_and_commit(objs)
+        finally:
+            # Clear even on failure: the commit may have landed before the error.
+            listening_cache.invalidate()
 
     async def get_scrobbles(self, f: ScrobbleFilter = None) -> list[Scrobble]:
         """Get scrobbles with optional filtering."""

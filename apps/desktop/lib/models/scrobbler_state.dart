@@ -73,6 +73,7 @@ class ScrobblerState {
       integration = '${json['active_integration_id'] ?? 'apple_music'}',
       runtimeState = '${json['runtime_state'] ?? 'unknown'}',
       databaseAvailable = json['database_available'] == true,
+      libraryRevision = (json['library_revision'] as num?)?.toInt() ?? 0,
       artworkUrl = object(json['lastfm_album'])['cover_image'] as String?,
       profile = json['user'] == null
           ? null
@@ -84,6 +85,8 @@ class ScrobblerState {
   final ScrobbleTrack? currentTrack;
   final bool scrobbleEnabled, isScrobbling, databaseAvailable;
   final String integration, runtimeState;
+  // Advances after each committed scrobble write.
+  final int libraryRevision;
   final String? artworkUrl;
   final ListenerProfile? profile;
   final List<ScrobbleTrack> scrobbles, pending;

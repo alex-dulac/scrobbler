@@ -15,6 +15,7 @@ from routers.library_router import library_router
 from routers.manual_router import manual_router
 from routers.artwork_router import artwork_router
 from routers.ipod_router import ipod_router
+from repositories.listening_cache import listening_cache
 from services.apple_music_service import get_current_track_artwork_data
 from services.ipod_watcher import IpodWatcher
 from services.scrobbler_runtime import ScrobblerRuntime
@@ -112,6 +113,9 @@ async def state(
         "user": snapshot.user,
         "session": snapshot.session,
         "database_available": runtime.engine.database_available,
+        # Lets the app refetch library data after a write commits, rather than when
+        # the session list changes (which happens before the database write).
+        "library_revision": listening_cache.revision,
         "runtime_state": runtime.state.value,
         "ipod": ipod.status(),
     }

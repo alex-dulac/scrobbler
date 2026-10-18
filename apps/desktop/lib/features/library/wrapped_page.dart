@@ -10,6 +10,7 @@ import 'library_api.dart';
 import 'library_models.dart';
 import 'library_widgets.dart';
 import 'listening_heatmap.dart';
+import '../../widgets/library_refresh.dart';
 
 class WrappedPage extends StatefulWidget {
   const WrappedPage({super.key, required this.api});
@@ -18,7 +19,8 @@ class WrappedPage extends StatefulWidget {
   State<WrappedPage> createState() => _WrappedPageState();
 }
 
-class _WrappedPageState extends State<WrappedPage> {
+class _WrappedPageState extends State<WrappedPage>
+    with LibraryRefresh<WrappedPage> {
   List<int> _years = [];
   int? _year;
   Json? _data;
@@ -28,7 +30,6 @@ class _WrappedPageState extends State<WrappedPage> {
   @override
   void initState() {
     super.initState();
-    LibraryCache.forApi(widget.api).addListener(_refresh);
     _load();
   }
 
@@ -36,8 +37,6 @@ class _WrappedPageState extends State<WrappedPage> {
   void didUpdateWidget(WrappedPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api) {
-      LibraryCache.forApi(oldWidget.api).removeListener(_refresh);
-      LibraryCache.forApi(widget.api).addListener(_refresh);
       _data = null;
       _years = [];
       _year = null;
@@ -45,7 +44,11 @@ class _WrappedPageState extends State<WrappedPage> {
     }
   }
 
-  void _refresh() => _load();
+  @override
+  ScrobblerApi get libraryApi => widget.api;
+
+  @override
+  void reloadLibrary() => _load();
 
   Future<void> _load({int? year, bool force = false}) async {
     if (year != null && year != _year) {
@@ -83,12 +86,6 @@ class _WrappedPageState extends State<WrappedPage> {
         });
       }
     }
-  }
-
-  @override
-  void dispose() {
-    LibraryCache.forApi(widget.api).removeListener(_refresh);
-    super.dispose();
   }
 
   @override

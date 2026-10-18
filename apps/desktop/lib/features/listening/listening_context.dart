@@ -5,6 +5,7 @@ import '../../services/library_cache.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/format.dart';
 import 'listening_timeline.dart';
+import '../../widgets/library_refresh.dart';
 
 /// Listening history for the current recording, displayed without navigation.
 class ListeningContext extends StatefulWidget {
@@ -16,7 +17,8 @@ class ListeningContext extends StatefulWidget {
   State<ListeningContext> createState() => _ListeningContextState();
 }
 
-class _ListeningContextState extends State<ListeningContext> {
+class _ListeningContextState extends State<ListeningContext>
+    with LibraryRefresh<ListeningContext> {
   Map<String, dynamic>? _data;
   String? _error;
   int _generation = 0;
@@ -24,7 +26,6 @@ class _ListeningContextState extends State<ListeningContext> {
   @override
   void initState() {
     super.initState();
-    LibraryCache.forApi(widget.api).addListener(_refresh);
     _load();
   }
 
@@ -32,8 +33,6 @@ class _ListeningContextState extends State<ListeningContext> {
   void didUpdateWidget(ListeningContext oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api) {
-      LibraryCache.forApi(oldWidget.api).removeListener(_refresh);
-      LibraryCache.forApi(widget.api).addListener(_refresh);
       _data = null;
     }
     final previous = oldWidget.track;
@@ -46,7 +45,11 @@ class _ListeningContextState extends State<ListeningContext> {
     }
   }
 
-  void _refresh() => _load();
+  @override
+  ScrobblerApi get libraryApi => widget.api;
+
+  @override
+  void reloadLibrary() => _load();
 
   String? _dataPath;
   Future<void> _load({bool force = false}) async {
@@ -77,12 +80,6 @@ class _ListeningContextState extends State<ListeningContext> {
             : 'Could not load listening history. Please try again.',
       );
     }
-  }
-
-  @override
-  void dispose() {
-    LibraryCache.forApi(widget.api).removeListener(_refresh);
-    super.dispose();
   }
 
   @override

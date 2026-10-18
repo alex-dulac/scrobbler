@@ -7,7 +7,7 @@ Base = declarative_base()
 class BaseTable(Base):
     __abstract__ = True
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)  # the primary key is already indexed
     created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
@@ -17,7 +17,7 @@ class Scrobble(BaseTable):
     track_name = Column(String, index=True, nullable=False)
     artist_name = Column(String, index=True, nullable=False)
     album_name = Column(String, nullable=True)
-    scrobbled_at = Column(DateTime, default=datetime.now, nullable=False)
+    scrobbled_at = Column(DateTime, default=datetime.now, index=True, nullable=False)
 
     def __repr__(self):
         return f"<Scrobble(track_name='{self.track_name}', artist_name='{self.artist_name}')>"
@@ -60,7 +60,7 @@ class Track(BaseTable):
     # note: tags don't seem to return anything for tracks via the Lastfm API
     __tablename__ = "tracks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     title = Column(String, unique=True, index=True, nullable=False)
     artist_name = Column(String, index=True, nullable=False)
     album_name = Column(String, nullable=True)

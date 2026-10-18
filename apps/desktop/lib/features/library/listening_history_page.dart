@@ -10,6 +10,7 @@ import 'artist_detail_page.dart';
 import 'library_api.dart';
 import 'library_models.dart';
 import 'library_widgets.dart';
+import '../../widgets/library_refresh.dart';
 
 class ListeningHistoryPage extends StatefulWidget {
   const ListeningHistoryPage({super.key, required this.api});
@@ -18,7 +19,8 @@ class ListeningHistoryPage extends StatefulWidget {
   State<ListeningHistoryPage> createState() => _ListeningHistoryPageState();
 }
 
-class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
+class _ListeningHistoryPageState extends State<ListeningHistoryPage>
+    with LibraryRefresh<ListeningHistoryPage> {
   final _search = TextEditingController();
   Timer? _debounce;
   HistoryPage? _data;
@@ -29,7 +31,6 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
   @override
   void initState() {
     super.initState();
-    LibraryCache.forApi(widget.api).addListener(_refresh);
     _load();
   }
 
@@ -37,15 +38,17 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
   void didUpdateWidget(ListeningHistoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api) {
-      LibraryCache.forApi(oldWidget.api).removeListener(_refresh);
-      LibraryCache.forApi(widget.api).addListener(_refresh);
       _data = null;
       _dataPath = null;
       _load();
     }
   }
 
-  void _refresh() => _load();
+  @override
+  ScrobblerApi get libraryApi => widget.api;
+
+  @override
+  void reloadLibrary() => _load();
 
   String? _dataPath;
   Future<void> _load({bool force = false}) async {
@@ -95,7 +98,6 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
 
   @override
   void dispose() {
-    LibraryCache.forApi(widget.api).removeListener(_refresh);
     _debounce?.cancel();
     _search.dispose();
     super.dispose();

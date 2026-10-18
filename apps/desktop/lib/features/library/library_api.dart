@@ -39,4 +39,33 @@ class LibraryApi {
       cache.get(onThisDayPath(day), force: force);
   Future<Json> artist(String artist, {bool force = false}) =>
       cache.get(artistPath(artist), force: force);
+
+  /// Whether a scrobble by [artist] at local time [at] can change the
+  /// response at [path]. Unknown paths are assumed affected.
+  ///
+  /// Other artists' ranks can shift too; those refresh when their entries
+  /// expire rather than refetching every artist on each scrobble.
+  static bool affectedBy(
+    Uri path, {
+    required String artist,
+    required DateTime at,
+  }) {
+    final segments = path.pathSegments.where((s) => s.isNotEmpty).toList();
+    if (segments.length < 2 || segments[0] != 'library') return true;
+    switch (segments[1]) {
+      case 'wrapped':
+        // A year's ranks are compared with the year before.
+        final year = int.tryParse(segments.length > 2 ? segments[2] : '');
+        return year == null || year == at.year || year == at.year + 1;
+      case 'on-this-day':
+        // Only earlier years of the same calendar day are shown.
+        final day = DateTime.tryParse(path.queryParameters['date'] ?? '');
+        return day == null ||
+            (day.month == at.month && day.day == at.day && day.year > at.year);
+      case 'artists' || 'context':
+        return path.queryParameters['artist'] == artist;
+      default:
+        return true;
+    }
+  }
 }

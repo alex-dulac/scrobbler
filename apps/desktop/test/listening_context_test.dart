@@ -100,6 +100,30 @@ void main() {
     expect(calls, 2);
     api.close();
   });
+  testWidgets('hidden pages defer library refreshes until shown', (
+    tester,
+  ) async {
+    var calls = 0;
+    final api = apiFor((request) async => response(++calls));
+    Widget shown(bool visible) =>
+        TickerMode(enabled: visible, child: view(api));
+    await tester.pumpWidget(shown(true));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    await tester.pumpWidget(shown(false));
+    LibraryCache.forApi(api).invalidate();
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    await tester.pumpWidget(shown(true));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    // Showing a page with fresh data costs no request.
+    await tester.pumpWidget(shown(false));
+    await tester.pumpWidget(shown(true));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    api.close();
+  });
   testWidgets('ignores previous track response after track switch', (
     tester,
   ) async {

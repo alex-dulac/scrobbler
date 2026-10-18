@@ -10,6 +10,7 @@ import '../library/library_api.dart';
 import '../library/library_models.dart';
 import '../library/library_widgets.dart';
 import '../library/listening_heatmap.dart';
+import '../../widgets/library_refresh.dart';
 
 /// Lifetime Last.fm totals, this year's listening, and this day in past years.
 class OverviewPage extends StatefulWidget {
@@ -26,7 +27,8 @@ class OverviewPage extends StatefulWidget {
   State<OverviewPage> createState() => _OverviewPageState();
 }
 
-class _OverviewPageState extends State<OverviewPage> {
+class _OverviewPageState extends State<OverviewPage>
+    with LibraryRefresh<OverviewPage> {
   Json? _year, _onThisDay;
   Object? _error;
   late DateTime _today;
@@ -35,7 +37,6 @@ class _OverviewPageState extends State<OverviewPage> {
   @override
   void initState() {
     super.initState();
-    LibraryCache.forApi(widget.api).addListener(_refresh);
     _load();
   }
 
@@ -43,14 +44,16 @@ class _OverviewPageState extends State<OverviewPage> {
   void didUpdateWidget(OverviewPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.api != widget.api) {
-      LibraryCache.forApi(oldWidget.api).removeListener(_refresh);
-      LibraryCache.forApi(widget.api).addListener(_refresh);
       _year = _onThisDay = null;
       _load();
     }
   }
 
-  void _refresh() => _load();
+  @override
+  ScrobblerApi get libraryApi => widget.api;
+
+  @override
+  void reloadLibrary() => _load();
 
   Future<void> _load({bool force = false}) async {
     final generation = ++_generation;
@@ -76,12 +79,6 @@ class _OverviewPageState extends State<OverviewPage> {
     } catch (error) {
       if (mounted && generation == _generation) setState(() => _error = error);
     }
-  }
-
-  @override
-  void dispose() {
-    LibraryCache.forApi(widget.api).removeListener(_refresh);
-    super.dispose();
   }
 
   @override

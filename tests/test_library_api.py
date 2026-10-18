@@ -11,7 +11,9 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import OperationalError
 
 from library.dependencies import get_scrobbler_engine
+from repositories.listening_cache import ListeningCache, listening_cache
 from repositories.listening_repo import ListeningRepository
+from repositories.scrobble_repo import ScrobbleRepository
 from routers.library_router import get_listening_repository, library_router
 
 
@@ -81,6 +83,10 @@ class LibraryApiTests(unittest.TestCase):
 
 
 class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        listening_cache.invalidate()
+        self.addCleanup(listening_cache.invalidate)
+
     async def test_history_literal_search_and_stable_pagination(self):
         repo = ListeningRepository()
         repo._rows = AsyncMock(return_value=[])
@@ -93,6 +99,33 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(80, compiled.params.values())
         self.assertIn(40, compiled.params.values())
         self.assertIn('ESCAPE', str(compiled))
+
+    async def test_history_total_is_counted_once_per_query(self):
+        repo = ListeningRepository()
+        repo._rows = AsyncMock(return_value=[])
+        repo._count = AsyncMock(return_value=120)
+        for page in (1, 2, 3):
+            self.assertEqual((await repo.history('love', page, 40))['total'], 120)
+        self.assertEqual(repo._count.await_count, 1)
+        await repo.history('', 1, 40)
+        self.assertEqual(repo._count.await_count, 2)
+
+    async def test_years_and_artist_totals_are_cached_until_a_scrobble_is_written(self):
+        repo = ListeningRepository()
+        repo.execute = AsyncMock(return_value=Mock(scalars=Mock(return_value=Mock(
+            all=Mock(return_value=[2026, 2025])))))
+        self.assertEqual(await repo.years(), {'years': [2026, 2025]})
+        (await repo.years())['years'].clear()  # callers can't corrupt the cache
+        self.assertEqual(await repo.years(), {'years': [2026, 2025]})
+        await repo._artist_totals()
+        await repo._artist_totals()
+        self.assertEqual(repo.execute.await_count, 2)
+
+        session = SimpleNamespace(add_all=Mock(), commit=AsyncMock())
+        await ScrobbleRepository(session).add_and_commit([object()])
+        await repo.years()
+        await repo._artist_totals()
+        self.assertEqual(repo.execute.await_count, 4)
 
     async def test_wrapped_uses_range_and_composite_identities(self):
         repo = ListeningRepository()
@@ -135,6 +168,8 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
 
         repo.execute = execute
         repo._ranking = AsyncMock(return_value=[])
+        # Ranking totals cover every artist by design, and are shared via the cache.
+        repo._artist_totals = AsyncMock(return_value=())
         await repo.artist("Artist' OR 1=1")
         for statement in statements:
             compiled = statement.compile(dialect=postgresql.dialect())
@@ -149,7 +184,8 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
             'total_scrobbles': 5, 'first_scrobbled_at': first['scrobbled_at'],
             'last_scrobbled_at': datetime(2026, 9, 1)})
         repo._year_counts = AsyncMock(return_value=[{'year': 2011, 'count': 5}])
-        repo._artists_ahead = AsyncMock(return_value=13)
+        # 13 artists ahead; ties with this artist's 5 share its rank.
+        repo._artist_totals = AsyncMock(return_value=(1, 5, 5, *[6] * 12, 40))
         repo._rows = AsyncMock(return_value=[first])
         repo._ranking = AsyncMock(return_value=[])
         summary = await repo.artist('Artist')
@@ -256,3 +292,34 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(started, [1])  # one session: the second waits its turn
         release.set()
         self.assertEqual(await task, [1, 2])
+
+
+class ListeningCacheTests(unittest.IsolatedAsyncioTestCase):
+    async def test_expiry_capacity_and_writes_during_a_load(self):
+        now = [0.0]
+        cache = ListeningCache(ttl=10, capacity=2, clock=lambda: now[0])
+        load = AsyncMock(side_effect=[1, 2, 3, 4, 5])
+        self.assertEqual(await cache.get('a', load), 1)
+        self.assertEqual(await cache.get('a', load), 1)
+        now[0] = 10
+        self.assertEqual(await cache.get('a', load), 2)  # expired
+        await cache.get('b', load)
+        await cache.get('c', load)  # evicts 'a', the least recently used
+        self.assertEqual(await cache.get('a', load), 5)
+
+        async def load_then_write():
+            cache.invalidate()
+            return 'stale'
+        self.assertEqual(await cache.get('d', load_then_write), 'stale')
+        self.assertEqual(await cache.get('d', AsyncMock(return_value='fresh')), 'fresh')
+
+    async def test_failed_write_still_invalidates(self):
+        listening_cache.invalidate()
+        self.addCleanup(listening_cache.invalidate)
+        load = AsyncMock(return_value=(2026,))
+        await listening_cache.get('years', load)
+        session = SimpleNamespace(add_all=Mock(), commit=AsyncMock(side_effect=OSError))
+        with self.assertRaises(OSError):
+            await ScrobbleRepository(session).add_and_commit([object()])
+        await listening_cache.get('years', load)
+        self.assertEqual(load.await_count, 2)

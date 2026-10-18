@@ -27,6 +27,12 @@ class SessionManager:
         self.engine = create_async_engine(
             url=url,
             poolclass=AsyncAdaptedQueuePool,
+            # Library endpoints fan out ~11-13 concurrent queries; keep those
+            # connections open so each request doesn't reconnect to a remote DB.
+            # No overflow: the hosted plan allows 20 connections (3 reserved), so
+            # bursts must queue for a pooled connection rather than be refused.
+            pool_size=15,
+            max_overflow=0,
             pool_pre_ping=True,
             pool_recycle=1800,
         )

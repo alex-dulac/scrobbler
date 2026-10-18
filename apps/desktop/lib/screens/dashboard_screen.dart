@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../controllers/scrobbler_controller.dart';
-import '../services/library_cache.dart';
 import '../features/library/listening_history_page.dart';
 import '../features/library/wrapped_page.dart';
 import '../features/listening/listening_page.dart';
@@ -49,7 +48,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _page = page;
       _visitedPages.add(page);
     });
-    LibraryCache.forApi(widget.controller.api).revalidate();
   }
 
   Widget _content(int page) {

@@ -30,6 +30,24 @@ Map<String, dynamic> history(String title, {int total = 1}) => {
   'total': total,
 };
 void main() {
+  test('a scrobble affects only the library responses it can change', () {
+    final at = DateTime(2025, 10, 18, 21);
+    bool affects(String path) =>
+        LibraryApi.affectedBy(Uri.parse(path), artist: 'Artist', at: at);
+    expect(affects(LibraryApi.historyPath('other', 9)), isTrue);
+    expect(affects('/library/years/'), isTrue);
+    expect(affects('/library/wrapped/2025/'), isTrue);
+    expect(affects('/library/wrapped/2026/'), isTrue); // previous ranks
+    expect(affects('/library/wrapped/2024/'), isFalse);
+    expect(affects(LibraryApi.onThisDayPath(DateTime(2026, 10, 18))), isTrue);
+    expect(affects(LibraryApi.onThisDayPath(DateTime(2025, 10, 18))), isFalse);
+    expect(affects(LibraryApi.onThisDayPath(DateTime(2026, 10, 19))), isFalse);
+    expect(affects(LibraryApi.artistPath('Artist')), isTrue);
+    expect(affects(LibraryApi.artistPath('Other')), isFalse);
+    expect(affects('/library/context/?artist=Artist&track=Song'), isTrue);
+    expect(affects('/library/context/?artist=Other&track=Song'), isFalse);
+    expect(affects('/library/something-new/'), isTrue);
+  });
   test(
     'library API preserves encoded artist names and history query',
     () async {

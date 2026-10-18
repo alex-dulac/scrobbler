@@ -4,12 +4,14 @@ Dates follow the existing database's naive datetime convention. Track identity i
 artist + title; album metadata does not split a track's listening count.
 """
 import asyncio
+from bisect import bisect_right
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import Date, and_, cast, extract, func, or_, select
 
 from models.db import Scrobble as S
 from repositories.base import BaseRepository
+from repositories.listening_cache import listening_cache
 
 
 class ListeningRepository(BaseRepository):
@@ -49,13 +51,20 @@ class ListeningRepository(BaseRepository):
         ).where(*conditions).order_by(S.scrobbled_at.desc(), S.id.desc())
         return {
             'items': await self._rows(statement.limit(page_size).offset((page - 1) * page_size)),
-            'total': await self._count(*conditions), 'page': page, 'page_size': page_size,
+            # Totals scan every matching row and only change on writes; paging
+            # through results shouldn't recount them.
+            'total': await listening_cache.get(
+                ('history_total', query), lambda: self._count(*conditions)),
+            'page': page, 'page_size': page_size,
         }
 
     async def years(self):
+        return {'years': list(await listening_cache.get('years', self._load_years))}
+
+    async def _load_years(self):
         year = extract('year', S.scrobbled_at).label('year')
         result = await self.execute(select(year).distinct().order_by(year.desc()))
-        return {'years': [int(value) for value in result.scalars().all()]}
+        return tuple(int(value) for value in result.scalars().all())
 
     async def _ranking(self, conditions, columns, *, album=False, limit=10):
         selections = [column.label(label) for column, label in columns]
@@ -160,12 +169,13 @@ class ListeningRepository(BaseRepository):
             *conditions).group_by(year).order_by(year))
         return [{'year': int(row['year']), 'count': row['count']} for row in years]
 
-    async def artist(self, artist: str):
+    async def artist(self, artist: str, *, rank: bool = True):
+        """``rank=False`` skips the whole-table scan for callers that don't show it."""
         conditions = (S.artist_name == artist,)
-        span, years, ahead, first, top_albums, top_tracks = await self._gather(
+        span, years, totals, first, top_albums, top_tracks = await self._gather(
             self._listening_span(conditions),
             self._year_counts(conditions),
-            self._artists_ahead(artist),
+            self._artist_totals() if rank else asyncio.sleep(0, None),
             self._rows(select(
                 S.track_name.label('name'), S.album_name.label('album'), S.scrobbled_at,
             ).where(*conditions).order_by(S.scrobbled_at, S.id).limit(1)),
@@ -176,18 +186,22 @@ class ListeningRepository(BaseRepository):
             'artist': artist,
             **span,
             # Position among all artists by lifetime scrobbles; ties share a rank.
-            'rank': ahead + 1 if span['total_scrobbles'] else None,
+            'rank': len(totals) - bisect_right(totals, span['total_scrobbles']) + 1
+            if totals is not None and span['total_scrobbles'] else None,
             'first_track': first[0] if first else None,
             'years': years,
             'top_albums': top_albums,
             'top_tracks': top_tracks,
         }
 
-    async def _artists_ahead(self, artist: str):
-        """How many artists have more lifetime scrobbles than this one."""
-        total = select(func.count(S.id)).where(S.artist_name == artist).scalar_subquery()
-        ahead = select(S.artist_name).group_by(S.artist_name).having(func.count(S.id) > total).subquery()
-        return (await self.execute(select(func.count()).select_from(ahead))).scalar_one()
+    async def _artist_totals(self):
+        """Every artist's lifetime scrobble count, ascending, for ranking."""
+        return await listening_cache.get('artist_totals', self._load_artist_totals)
+
+    async def _load_artist_totals(self):
+        count = func.count(S.id)
+        result = await self.execute(select(count).group_by(S.artist_name).order_by(count))
+        return tuple(result.scalars().all())
 
 
     async def _listening_span(self, conditions, *, album=False):
@@ -202,29 +216,32 @@ class ListeningRepository(BaseRepository):
         return rows[0]
 
     async def context(self, artist: str, track: str, album: str | None = None):
-        # A single session owns all component queries and closes on any failure.
-        async with self._get_session() as session:
-            return await ListeningRepository(session)._context(artist, track, album)
-
-    async def _context(self, artist: str, track: str, album: str | None):
+        # Every query is tiny, so on a remote database the round trips are the
+        # cost; run them together rather than one after another.
         track_conditions = (S.artist_name == artist, S.track_name == track)
-        track_years = await self._year_counts(track_conditions)
-        recent = await self._rows(select(S.scrobbled_at).where(*track_conditions).order_by(
-            S.scrobbled_at.desc(), S.id.desc()).limit(5))
+        album_conditions = (S.artist_name == artist, S.album_name == album)
+        (track_years, recent, track_span,
+         album_span, album_tracks, album_years, artist_summary) = await self._gather(
+            self._year_counts(track_conditions),
+            self._rows(select(S.scrobbled_at).where(*track_conditions).order_by(
+                S.scrobbled_at.desc(), S.id.desc()).limit(5)),
+            self._listening_span(track_conditions),
+            self._listening_span(album_conditions, album=True)
+            if album is not None else asyncio.sleep(0, None),
+            self._ranking(album_conditions, [(S.track_name, 'name')], limit=5)
+            if album is not None else asyncio.sleep(0, None),
+            self._year_counts(album_conditions) if album is not None else asyncio.sleep(0, None),
+            # The listening page doesn't show the artist's rank.
+            self.artist(artist, rank=False),
+        )
         track_context = {
-            'name': track, 'artist': artist,
-            **await self._listening_span(track_conditions),
-            'years': track_years,
+            'name': track, 'artist': artist, **track_span, 'years': track_years,
             'recent_scrobbles': [row['scrobbled_at'] for row in recent],
         }
         album_context = None
         if album is not None:
-            album_conditions = (S.artist_name == artist, S.album_name == album)
             album_context = {
-                'name': album, 'artist': artist,
-                **await self._listening_span(album_conditions, album=True),
-                'top_tracks': await self._ranking(
-                    album_conditions, [(S.track_name, 'name')], limit=5),
-                'years': await self._year_counts(album_conditions),
+                'name': album, 'artist': artist, **album_span,
+                'top_tracks': album_tracks, 'years': album_years,
             }
-        return {'track': track_context, 'album': album_context, 'artist': await self.artist(artist)}
+        return {'track': track_context, 'album': album_context, 'artist': artist_summary}

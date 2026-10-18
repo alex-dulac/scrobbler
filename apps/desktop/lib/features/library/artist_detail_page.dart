@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../services/scrobbler_api.dart';
-import '../../services/library_cache.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/format.dart';
 import '../../widgets/album_art.dart';
@@ -9,6 +8,7 @@ import '../listening/listening_timeline.dart';
 import 'library_api.dart';
 import 'library_models.dart';
 import 'library_widgets.dart';
+import '../../widgets/library_refresh.dart';
 
 class ArtistDetailPage extends StatefulWidget {
   const ArtistDetailPage({super.key, required this.api, required this.artist});
@@ -18,7 +18,8 @@ class ArtistDetailPage extends StatefulWidget {
   State<ArtistDetailPage> createState() => _ArtistDetailPageState();
 }
 
-class _ArtistDetailPageState extends State<ArtistDetailPage> {
+class _ArtistDetailPageState extends State<ArtistDetailPage>
+    with LibraryRefresh<ArtistDetailPage> {
   Json? _data;
   Object? _error;
   bool _loading = true;
@@ -26,11 +27,14 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
   @override
   void initState() {
     super.initState();
-    LibraryCache.forApi(widget.api).addListener(_refresh);
     _load();
   }
 
-  void _refresh() => _load();
+  @override
+  ScrobblerApi get libraryApi => widget.api;
+
+  @override
+  void reloadLibrary() => _load();
   Future<void> _load({bool force = false}) async {
     final generation = ++_generation;
     final api = LibraryApi(widget.api);
@@ -58,20 +62,10 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
   @override
   void didUpdateWidget(ArtistDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.api != widget.api) {
-      LibraryCache.forApi(oldWidget.api).removeListener(_refresh);
-      LibraryCache.forApi(widget.api).addListener(_refresh);
-    }
     if (oldWidget.api != widget.api || oldWidget.artist != widget.artist) {
       _data = null;
       _load();
     }
-  }
-
-  @override
-  void dispose() {
-    LibraryCache.forApi(widget.api).removeListener(_refresh);
-    super.dispose();
   }
 
   @override

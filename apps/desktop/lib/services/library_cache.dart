@@ -20,12 +20,12 @@ class LibraryCache extends ChangeNotifier {
   final DateTime Function() _now;
   final _entries = <String, _Entry>{};
   final _pending = <String, Future<Map<String, dynamic>>>{};
-  int _revision = 0;
 
   /// Library queries run against a possibly remote database, so they get far
   /// more time than playback calls.
   static const libraryTimeout = Duration(seconds: 30);
 
+  /// The latest response for [path], even if stale, for display while loading.
   Map<String, dynamic>? peek(String path) {
     final entry = _entries.remove(path);
     if (entry == null) return null;
@@ -34,25 +34,24 @@ class LibraryCache extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> get(String path, {bool force = false}) {
-    final key = '$_revision:$path';
-    final pending = _pending[key];
+    final pending = _pending[path];
     if (pending != null) return pending;
     final entry = _entries[path];
     if (!force &&
         entry != null &&
-        entry.revision == _revision &&
+        !entry.stale &&
         _now().difference(entry.loaded) < ttl) {
       return Future.value(peek(path)!);
     }
-    final revision = _revision;
     late final Future<Map<String, dynamic>> request;
     request = api
         .request('GET', path, null, libraryTimeout)
         .then((data) {
-          // Responses begun before invalidation must not repopulate the cache.
-          if (revision == _revision) {
+          // Invalidation drops a request from _pending; a response begun
+          // before then must not repopulate the cache.
+          if (identical(_pending[path], request)) {
             _entries.remove(path);
-            _entries[path] = _Entry(data, _now(), revision);
+            _entries[path] = _Entry(data, _now());
             while (_entries.length > capacity) {
               _entries.remove(_entries.keys.first);
             }
@@ -60,24 +59,29 @@ class LibraryCache extends ChangeNotifier {
           return data;
         })
         .whenComplete(() {
-          _pending.remove(key);
+          if (identical(_pending[path], request)) _pending.remove(path);
         });
-    _pending[key] = request;
+    _pending[path] = request;
     return request;
   }
 
-  void invalidate() {
-    _revision++;
+  /// Marks every response stale.
+  void invalidate() => invalidateWhere((_) => true);
+
+  /// Marks the responses whose paths [affected] matches stale, and tells
+  /// listeners so visible pages can refetch them.
+  void invalidateWhere(bool Function(Uri path) affected) {
+    for (final MapEntry(:key, :value) in _entries.entries) {
+      if (affected(Uri.parse(key))) value.stale = true;
+    }
+    _pending.removeWhere((path, _) => affected(Uri.parse(path)));
     notifyListeners();
   }
-
-  /// Called when revisiting tabs; fresh responses avoid network requests.
-  void revalidate() => notifyListeners();
 }
 
 class _Entry {
-  const _Entry(this.data, this.loaded, this.revision);
+  _Entry(this.data, this.loaded);
   final Map<String, dynamic> data;
   final DateTime loaded;
-  final int revision;
+  bool stale = false;
 }
