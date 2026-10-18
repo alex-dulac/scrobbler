@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -29,9 +30,13 @@ async def capture_plays(mount: Path, repo: IPodRepository) -> int:
     return captured
 
 
+def scrobble_window_start() -> datetime:
+    return datetime.now().astimezone() - SCROBBLE_WINDOW
+
+
 async def get_pending_plays(repo: IPodRepository) -> list[IpodPlay]:
     """Stored plays awaiting review that are still recent enough for Last.fm to accept."""
-    return await repo.get_pending_plays(datetime.now().astimezone() - SCROBBLE_WINDOW)
+    return await repo.get_pending_plays(scrobble_window_start())
 
 
 async def scrobble_plays(
@@ -39,11 +44,15 @@ async def scrobble_plays(
     repo: IPodRepository,
     scrobble_repo: ScrobbleRepository,
     plays: list[IpodPlay],
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[int, int]:
-    """Scrobble the given iPod plays, oldest first. Returns (scrobbled, failed) counts."""
+    """
+    Scrobble the given iPod plays, oldest first. Returns (scrobbled, failed) counts.
+    on_progress, if given, is called with the running (scrobbled, failed) counts after each play.
+    """
     plays = sorted(plays, key=lambda play: play.played_at)
 
-    scrobbled = 0
+    scrobbled = failed = 0
     for play in plays:
         track = Track(
             name=play.track_name,
@@ -53,11 +62,14 @@ async def scrobble_plays(
             clean_album=clean_up_title(play.album_name) if play.album_name else None,
         )
         lastfm_track = await lastfm.scrobble(track, scrobbled_at=play.played_at)
-        if not lastfm_track:
-            continue
+        if lastfm_track:
+            await repo.mark_scrobbled(play.id, datetime.now())
+            await scrobble_repo.add_scrobble(lastfm_track)
+            scrobbled += 1
+        else:
+            failed += 1
 
-        await repo.mark_scrobbled(play.id, datetime.now())
-        await scrobble_repo.add_scrobble(lastfm_track)
-        scrobbled += 1
+        if on_progress:
+            on_progress(scrobbled, failed)
 
-    return scrobbled, len(plays) - scrobbled
+    return scrobbled, failed

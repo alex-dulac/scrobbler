@@ -12,6 +12,8 @@ class ScrobblerController extends ChangeNotifier {
   bool busy = false;
   String? error;
   String? notice;
+  // Whether the current notice is about plays waiting on the iPod page.
+  bool noticeOpensIpod = false;
   Timer? _timer;
   Timer? _noticeTimer;
   int _noticeGeneration = 0;
@@ -55,6 +57,7 @@ class ScrobblerController extends ChangeNotifier {
       if (libraryChanged) LibraryCache.forApi(api).invalidate();
       connected = true;
       error = null;
+      if (previous != null) _announceIpod(previous.ipod, snapshot.ipod);
     } catch (exception) {
       if (_disposed || generation != _generation) return;
       connected = false;
@@ -68,16 +71,53 @@ class ScrobblerController extends ChangeNotifier {
   static String _scrobbleIdentity(ScrobbleTrack track) =>
       '${track.artist}\u0000${track.name}\u0000${track.album}\u0000${track.submittedAt}';
 
+  void _announceIpod(IpodStatus previous, IpodStatus current) {
+    if (current.captureId != previous.captureId) {
+      if (current.error != null) {
+        _showNotice(current.error, failed: true);
+      } else if (current.lastCaptured > 0) {
+        _showNotice(
+          'iPod connected: captured ${current.lastCaptured} new plays to review.',
+          opensIpod: true,
+        );
+      }
+    }
+    final jobFinished =
+        current.jobId > 0 &&
+        !current.jobRunning &&
+        (previous.jobRunning || previous.jobId != current.jobId);
+    if (jobFinished) {
+      // iPod scrobbles bypass the session list that normally invalidates it.
+      LibraryCache.forApi(api).invalidate();
+      final failed = current.jobFailed;
+      _showNotice(
+        [
+          'Scrobbled ${current.jobScrobbled} iPod plays.',
+          if (failed > 0) '$failed failed; retry them from the iPod page.',
+          ?current.jobError,
+        ].join(' '),
+        failed: failed > 0,
+        opensIpod: failed > 0,
+      );
+    }
+  }
+
   void _clearNotice() {
     _noticeTimer?.cancel();
     _noticeTimer = null;
     _noticeGeneration++;
     notice = null;
+    noticeOpensIpod = false;
   }
 
-  void _showNotice(String? message, {bool failed = false}) {
+  void _showNotice(
+    String? message, {
+    bool failed = false,
+    bool opensIpod = false,
+  }) {
     _clearNotice();
     notice = message;
+    noticeOpensIpod = opensIpod;
     if (message == null) return;
     final generation = _noticeGeneration;
     _noticeTimer = Timer(Duration(seconds: failed ? 8 : 4), () {

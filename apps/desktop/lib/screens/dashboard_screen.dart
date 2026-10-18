@@ -5,6 +5,7 @@ import '../features/library/listening_history_page.dart';
 import '../features/library/wrapped_page.dart';
 import '../features/listening/listening_page.dart';
 import '../features/listening/collection_pages.dart';
+import '../features/ipod/ipod_page.dart';
 import '../features/manual/manual_album_page.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     'History',
     'Wrapped',
     'Add a listen',
+    'iPod',
     'Session',
     'Profile',
     'Settings',
@@ -31,10 +33,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Icons.history_rounded,
     Icons.auto_awesome_rounded,
     Icons.library_add_rounded,
+    Icons.album_rounded,
     Icons.queue_music_rounded,
     Icons.person_outline_rounded,
     Icons.tune_rounded,
   ];
+  static const _ipodPage = 4;
+
+  void _open(int page) {
+    setState(() {
+      _page = page;
+      _visitedPages.add(page);
+    });
+    LibraryCache.forApi(widget.controller.api).revalidate();
+  }
+
   Widget _content(int page) {
     final controller = widget.controller;
     return switch (page) {
@@ -42,8 +55,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       1 => ListeningHistoryPage(api: controller.api),
       2 => WrappedPage(api: controller.api),
       3 => ManualAlbumPage(api: controller.api),
-      4 => SessionPage(state: controller.state),
-      5 => ProfilePage(state: controller.state),
+      _ipodPage => IpodPage(controller: controller),
+      5 => SessionPage(state: controller.state),
+      6 => ProfilePage(state: controller.state),
       _ => SettingsPage(controller: controller),
     };
   }
@@ -56,6 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final compact = constraints.maxWidth < 860;
         final controller = widget.controller;
         final theme = Theme.of(context);
+        final ipodPending = controller.state?.ipod.pendingCount ?? 0;
         return Scaffold(
           body: SafeArea(
             child: Column(
@@ -120,15 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             borderRadius: BorderRadius.circular(
                                               12,
                                             ),
-                                            onTap: () {
-                                              setState(() {
-                                                _page = i;
-                                                _visitedPages.add(i);
-                                              });
-                                              LibraryCache.forApi(
-                                                controller.api,
-                                              ).revalidate();
-                                            },
+                                            onTap: () => _open(i),
                                             child: Padding(
                                               padding: EdgeInsets.symmetric(
                                                 horizontal: compact ? 14 : 16,
@@ -136,16 +143,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               ),
                                               child: Row(
                                                 children: [
-                                                  Icon(
-                                                    _icons[i],
-                                                    size: 22,
-                                                    color: i == _page
-                                                        ? theme
-                                                              .colorScheme
-                                                              .primary
-                                                        : theme
-                                                              .colorScheme
-                                                              .onSurfaceVariant,
+                                                  Badge(
+                                                    isLabelVisible:
+                                                        i == _ipodPage &&
+                                                        ipodPending > 0,
+                                                    label: Text('$ipodPending'),
+                                                    child: Icon(
+                                                      _icons[i],
+                                                      size: 22,
+                                                      color: i == _page
+                                                          ? theme
+                                                                .colorScheme
+                                                                .primary
+                                                          : theme
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                    ),
                                                   ),
                                                   if (!compact) ...[
                                                     const SizedBox(width: 13),
@@ -252,8 +265,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   horizontal: 28,
                                   vertical: 12,
                                 ),
-                                child: Text(
-                                  controller.error ?? controller.notice!,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        controller.error ?? controller.notice!,
+                                      ),
+                                    ),
+                                    if (controller.error == null &&
+                                        controller.noticeOpensIpod &&
+                                        _page != _ipodPage)
+                                      TextButton(
+                                        onPressed: () => _open(_ipodPage),
+                                        child: const Text('Review'),
+                                      ),
+                                  ],
                                 ),
                               ),
                             Expanded(

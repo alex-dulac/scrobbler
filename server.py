@@ -10,7 +10,7 @@ from loguru import logger
 
 from core import config
 from core.database import session_manager
-from library.dependencies import get_scrobbler_runtime
+from library.dependencies import get_ipod_watcher, get_scrobbler_runtime
 from routers.router import router
 
 
@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI):
     db_connected = False
     runtime = None
     profile_task = None
+    ipod_watcher = None
 
     try:
         try:
@@ -52,8 +53,13 @@ async def lifespan(app: FastAPI):
         await runtime.start()
         logger.info("Scrobbler runtime started.")
 
+        ipod_watcher = await get_ipod_watcher()
+        ipod_watcher.start()
+
         yield
     finally:
+        if ipod_watcher is not None:
+            await ipod_watcher.stop()
         if profile_task is not None:
             profile_task.cancel()
             with suppress(asyncio.CancelledError):

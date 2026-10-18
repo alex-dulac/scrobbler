@@ -8,6 +8,7 @@ from services.spotify_service import SpotifyService
 from services.sync_service import SyncService
 
 if TYPE_CHECKING:
+    from services.ipod_watcher import IpodWatcher
     from services.scrobbler_engine import ScrobblerEngine
     from services.scrobbler_runtime import ScrobblerRuntime
 
@@ -17,6 +18,7 @@ spotify: SpotifyService | None = None
 sync_service: SyncService | None = None
 scrobbler_engine: ScrobblerEngine | None = None
 scrobbler_runtime: ScrobblerRuntime | None = None
+ipod_watcher: IpodWatcher | None = None
 
 _scrobbler_engine_lock = asyncio.Lock()
 _scrobbler_runtime_lock = asyncio.Lock()
@@ -81,6 +83,16 @@ async def get_scrobbler_engine() -> ScrobblerEngine:
             database_available=False,
         )
         return scrobbler_engine
+
+
+async def get_ipod_watcher() -> IpodWatcher:
+    global ipod_watcher
+
+    if ipod_watcher is None:
+        from services.ipod_watcher import IpodWatcher
+
+        ipod_watcher = IpodWatcher(await get_scrobbler_engine(), await get_lastfm_service())
+    return ipod_watcher
 
 
 async def get_scrobbler_runtime() -> ScrobblerRuntime:
