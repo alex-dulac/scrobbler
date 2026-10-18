@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
 
 /// Annual counts share a chronological axis, but each row has its own scale.
 class ListeningTimeline extends StatelessWidget {
@@ -47,8 +49,8 @@ class ListeningTimeline extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        border: Border.all(color: theme.colorScheme.outline),
-        borderRadius: BorderRadius.circular(8),
+        color: ScrobblerColors.of(context).surfaceRaised,
+        borderRadius: AppRadii.largeAll,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,9 +154,11 @@ class _AnnualRow extends StatelessWidget {
           for (final year in years)
             Expanded(
               child: Tooltip(
-                message: '$label · $year: ${counts[year] ?? 0} scrobbles',
+                message:
+                    '$label · $year: ${formatCount(counts[year] ?? 0)} scrobbles',
                 child: Semantics(
-                  label: '$label, $year, ${counts[year] ?? 0} scrobbles',
+                  label:
+                      '$label, $year, ${formatCount(counts[year] ?? 0)} scrobbles',
                   excludeSemantics: true,
                   child: SizedBox(
                     height: 58,
@@ -162,7 +166,7 @@ class _AnnualRow extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          '${counts[year] ?? 0}',
+                          formatCount(counts[year] ?? 0),
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
                         const SizedBox(height: 4),
@@ -178,7 +182,7 @@ class _AnnualRow extends StatelessWidget {
                                     alpha: counts[year] == peak ? 1 : .55,
                                   ),
                             borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(3),
+                              top: Radius.circular(AppRadii.small),
                             ),
                           ),
                         ),

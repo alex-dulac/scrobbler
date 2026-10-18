@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/scrobbler_api.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
+import '../../widgets/page_heading.dart';
 import '../../widgets/album_art.dart';
 
 class ManualAlbumPage extends StatefulWidget {
@@ -128,8 +131,7 @@ class _ManualAlbumPageState extends State<ManualAlbumPage> {
     }
   }
 
-  String _date(DateTime time) =>
-      '${time.month}/${time.day}/${time.year} · ${TimeOfDay.fromDateTime(time).format(context)}';
+  String _date(DateTime time) => '${formatDate(time)} · ${formatClock(time)}';
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -137,16 +139,13 @@ class _ManualAlbumPageState extends State<ManualAlbumPage> {
     final tracks = (preview?['tracks'] as List?) ?? const [];
     final eligible = tracks.where((track) => track['eligible'] != false).length;
     return ListView(
-      padding: const EdgeInsets.all(32),
+      padding: AppSpacing.page,
       children: [
-        Text('ALBUM PREVIEW', style: theme.textTheme.labelSmall),
-        const SizedBox(height: 12),
-        Text('Manual album scrobbling', style: theme.textTheme.displaySmall),
-        const SizedBox(height: 12),
-        const Text(
-          'Record an album you listened to on vinyl, CD, or away from your computer. Review every track and time before adding it to Last.fm.',
+        const PageHeading(
+          title: 'Manual album scrobbling',
+          subtitle:
+              'Record an album you listened to on vinyl, CD, or away from your computer. Review every track and time before adding it to Last.fm.',
         ),
-        const SizedBox(height: 28),
         Wrap(
           spacing: 16,
           runSpacing: 16,
@@ -255,7 +254,9 @@ class _ManualAlbumPageState extends State<ManualAlbumPage> {
               contentPadding: EdgeInsets.zero,
               leading: Text(
                 '${entry.key + 1}'.padLeft(2, '0'),
-                style: theme.textTheme.labelLarge,
+                style: AppFonts.numeric(
+                  theme.textTheme.labelLarge,
+                )?.copyWith(color: theme.colorScheme.primary),
               ),
               title: Text('${track['name']}'),
               subtitle: Text(
@@ -265,6 +266,7 @@ class _ManualAlbumPageState extends State<ManualAlbumPage> {
               ),
               trailing: Text(
                 '${((track['duration_seconds'] as num) / 60).floor()}:${((track['duration_seconds'] as num).floor() % 60).toString().padLeft(2, '0')}',
+                style: AppFonts.numeric(theme.textTheme.bodyMedium),
               ),
             );
           }),

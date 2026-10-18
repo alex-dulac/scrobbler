@@ -1,5 +1,5 @@
 """Response contracts for the desktop's local listening library."""
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -40,6 +40,18 @@ class ArtistTrackCount(NameCount):
     album: str | None
 
 
+class RankedName(NameCount):
+    previous_rank: int | None
+
+
+class RankedAlbum(AlbumCount):
+    previous_rank: int | None
+
+
+class RankedTrack(TrackCount):
+    previous_rank: int | None
+
+
 class MonthCount(BaseModel):
     month: int
     count: int
@@ -50,21 +62,49 @@ class YearCount(BaseModel):
     count: int
 
 
+class DayCount(BaseModel):
+    date: date
+    count: int
+
+
 class WrappedSummary(BaseModel):
     year: int
     total_scrobbles: int
+    previous_total_scrobbles: int
     unique_artists: int
     unique_albums: int
     unique_tracks: int
     monthly: list[MonthCount]
-    top_artists: list[NameCount]
-    top_albums: list[AlbumCount]
+    daily: list[DayCount]
+    top_artists: list[RankedName]
+    top_albums: list[RankedAlbum]
+    top_tracks: list[RankedTrack]
+
+
+class OnThisDayYear(BaseModel):
+    year: int
+    total_scrobbles: int
     top_tracks: list[TrackCount]
+
+
+class OnThisDay(BaseModel):
+    date: date
+    years: list[OnThisDayYear]
+
+
+class FirstListen(BaseModel):
+    name: str
+    album: str | None
+    scrobbled_at: datetime
 
 
 class ArtistSummary(BaseModel):
     artist: str
     total_scrobbles: int
+    rank: int | None
+    first_scrobbled_at: datetime | None
+    last_scrobbled_at: datetime | None
+    first_track: FirstListen | None
     years: list[YearCount]
     top_albums: list[NameCount]
     top_tracks: list[ArtistTrackCount]

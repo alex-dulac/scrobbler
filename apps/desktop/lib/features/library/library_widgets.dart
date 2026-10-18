@@ -1,103 +1,155 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'library_models.dart';
 import '../../services/scrobbler_api.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
 
 class LibraryFailure extends StatelessWidget {
   const LibraryFailure({super.key, required this.error, required this.retry});
   final Object error;
   final VoidCallback retry;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 32),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(Icons.cloud_off_outlined, size: 32),
-        const SizedBox(height: 16),
-        Text(
-          error is ApiException && (error as ApiException).statusCode == 503
-              ? 'Your listening library is unavailable'
-              : 'Couldn’t load your listening library',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          error is ApiException && (error as ApiException).statusCode == 503
-              ? 'Connect your history database and restart the app, then try again. Live scrobbling and queued listens remain available.'
-              : 'Check the backend connection, then try again.',
-        ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: retry,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Try again'),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final unavailable =
+        error is ApiException && (error as ApiException).statusCode == 503;
+    final slow = error is TimeoutException;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cloud_off_outlined, size: 32),
+          const SizedBox(height: 16),
+          Text(
+            unavailable
+                ? 'Your listening library is unavailable'
+                : slow
+                ? 'Your listening library is taking too long'
+                : 'Couldn’t load your listening library',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            unavailable
+                ? 'Connect your history database and restart the app, then try again. Live scrobbling and queued listens remain available.'
+                : slow
+                ? 'The history database didn’t answer in time. It may be busy or the connection slow; try again in a moment.'
+                : 'Check the backend connection, then try again.',
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: retry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try again'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class LibraryHeading extends StatelessWidget {
-  const LibraryHeading({
+class StatTile extends StatelessWidget {
+  const StatTile({
     super.key,
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
+    required this.value,
+    required this.label,
+    this.note,
   });
-  final String eyebrow, title, subtitle;
+  final String value, label;
+  final String? note;
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        eyebrow.toUpperCase(),
-        style: TextStyle(
-          letterSpacing: 2,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 125),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: ScrobblerColors.of(context).surfaceRaised,
+        borderRadius: AppRadii.largeAll,
       ),
-      const SizedBox(height: 12),
-      Text(title, style: Theme.of(context).textTheme.headlineLarge),
-      const SizedBox(height: 8),
-      Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-      const SizedBox(height: 28),
-    ],
-  );
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value, style: theme.textTheme.headlineLarge),
+          const SizedBox(height: 6),
+          Text(label.toUpperCase(), style: theme.textTheme.labelSmall),
+          if (note != null) ...[
+            const SizedBox(height: 4),
+            Text(note!, style: AppFonts.numeric(theme.textTheme.bodySmall)),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class LibraryStats extends StatelessWidget {
-  const LibraryStats({super.key, required this.values});
+  const LibraryStats({super.key, required this.values, this.notes = const {}});
   final Map<String, int> values;
+  final Map<String, String> notes;
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 12,
     runSpacing: 12,
     children: values.entries
         .map(
-          (entry) => Container(
-            constraints: const BoxConstraints(minWidth: 125),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${entry.value}',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(entry.key),
-              ],
-            ),
+          (entry) => StatTile(
+            value: formatCount(entry.value),
+            label: entry.key,
+            note: notes[entry.key],
           ),
         )
         .toList(),
   );
+}
+
+/// Change in position since the previous year's chart.
+class RankMovement extends StatelessWidget {
+  const RankMovement({super.key, required this.rank, this.previousRank});
+  final int rank;
+  final int? previousRank;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = AppFonts.numeric(theme.textTheme.labelSmall);
+    final previous = previousRank;
+    if (previous == null) {
+      return Tooltip(
+        message: 'New to the chart this year',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.colorScheme.primary),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            'NEW',
+            style: style?.copyWith(color: theme.colorScheme.onSurface),
+          ),
+        ),
+      );
+    }
+    final change = previous - rank;
+    return Tooltip(
+      message: 'Last year: #$previous',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            change > 0
+                ? Icons.arrow_upward_rounded
+                : change < 0
+                ? Icons.arrow_downward_rounded
+                : Icons.remove_rounded,
+            size: 12,
+            color: ScrobblerColors.of(context).textMuted,
+          ),
+          if (change != 0) Text('${change.abs()}', style: style),
+        ],
+      ),
+    );
+  }
 }
 
 class LibraryRanking extends StatelessWidget {
@@ -106,10 +158,14 @@ class LibraryRanking extends StatelessWidget {
     required this.title,
     required this.items,
     this.onSelect,
+    this.showMovement = false,
   });
   final String title;
   final List<Json> items;
   final void Function(String)? onSelect;
+
+  /// Items carry `previous_rank`; shown when there is a previous year to compare.
+  final bool showMovement;
   @override
   Widget build(BuildContext context) {
     final maximum = items.fold<int>(
@@ -130,7 +186,7 @@ class LibraryRanking extends StatelessWidget {
             final name = label(item['name']);
             return InkWell(
               onTap: onSelect == null ? null : () => onSelect!(name),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppRadii.smallAll,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   vertical: 10,
@@ -142,9 +198,12 @@ class LibraryRanking extends StatelessWidget {
                       width: 32,
                       child: Text(
                         '${entry.key + 1}'.padLeft(2, '0'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                        style:
+                            AppFonts.numeric(
+                              Theme.of(context).textTheme.bodyMedium,
+                            )?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                       ),
                     ),
                     Expanded(
@@ -168,13 +227,30 @@ class LibraryRanking extends StatelessWidget {
                               context,
                             ).colorScheme.outline.withValues(alpha: .4),
                             minHeight: 3,
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: AppRadii.smallAll,
                           ),
                         ],
                       ),
                     ),
+                    if (showMovement)
+                      SizedBox(
+                        width: 52,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: RankMovement(
+                            rank: entry.key + 1,
+                            previousRank: (item['previous_rank'] as num?)
+                                ?.toInt(),
+                          ),
+                        ),
+                      ),
                     const SizedBox(width: 16),
-                    Text('${number(item['count'])}'),
+                    Text(
+                      formatCount(number(item['count'])),
+                      style: AppFonts.numeric(
+                        Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
                   ],
                 ),
               ),

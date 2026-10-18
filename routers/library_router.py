@@ -1,11 +1,14 @@
 """Read-only desktop library endpoints, authenticated by the parent router."""
 from collections.abc import AsyncIterator
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.exc import SQLAlchemyError
 
 from library.dependencies import get_scrobbler_engine
-from models.library_schemas import ArtistSummary, HistoryPage, LibraryYears, ListeningContext, WrappedSummary
+from models.library_schemas import (
+    ArtistSummary, HistoryPage, LibraryYears, ListeningContext, OnThisDay, WrappedSummary,
+)
 from repositories.listening_repo import ListeningRepository
 from services.scrobbler_engine import ScrobblerEngine
 
@@ -44,6 +47,15 @@ async def wrapped(
     repository: ListeningRepository = Depends(get_listening_repository),
 ):
     return await repository.wrapped(year)
+
+
+@library_router.get('/on-this-day/', response_model=OnThisDay)
+async def on_this_day(
+    day: date = Query(alias='date'),
+    repository: ListeningRepository = Depends(get_listening_repository),
+):
+    # The client sends its local date; scrobble times are stored as local naive datetimes.
+    return await repository.on_this_day(day)
 
 
 @library_router.get('/artists/', response_model=ArtistSummary)

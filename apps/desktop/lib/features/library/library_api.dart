@@ -28,6 +28,15 @@ class LibraryApi {
           .toList();
   Future<Json> wrapped(int year, {bool force = false}) =>
       cache.get('/library/wrapped/$year/', force: force);
+  static String onThisDayPath(DateTime day) => Uri(
+    path: '/library/on-this-day/',
+    queryParameters: {
+      'date':
+          '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
+    },
+  ).toString();
+  Future<Json> onThisDay(DateTime day, {bool force = false}) =>
+      cache.get(onThisDayPath(day), force: force);
   Future<Json> artist(String artist, {bool force = false}) =>
       cache.get(artistPath(artist), force: force);
 }

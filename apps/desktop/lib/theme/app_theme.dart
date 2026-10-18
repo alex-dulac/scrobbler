@@ -1,5 +1,30 @@
 import 'package:flutter/material.dart';
 
+abstract final class AppFonts {
+  static const display = 'Space Grotesk';
+  static const mono = 'JetBrains Mono';
+  static const tabular = [FontFeature.tabularFigures()];
+
+  /// Counts, durations, and timestamps share a fixed-width face so they align.
+  static TextStyle? numeric(TextStyle? base) => base?.copyWith(
+    fontFamily: mono,
+    fontSize: base.fontSize == null ? null : base.fontSize! - 1,
+    fontFeatures: tabular,
+  );
+}
+
+/// Two radii: [small] for controls, bars, and thumbnails; [large] for panels.
+abstract final class AppRadii {
+  static const small = 6.0;
+  static const large = 14.0;
+  static const smallAll = BorderRadius.all(Radius.circular(small));
+  static const largeAll = BorderRadius.all(Radius.circular(large));
+}
+
+abstract final class AppSpacing {
+  static const page = EdgeInsets.fromLTRB(32, 8, 32, 32);
+}
+
 abstract final class AppPalette {
   static const ink = Color(0xFF101019);
   static const surface = Color(0xFF171722);
@@ -47,7 +72,7 @@ class ScrobblerColors extends ThemeExtension<ScrobblerColors> {
   final Color success;
 
   static ScrobblerColors of(BuildContext context) {
-    return Theme.of(context).extension<ScrobblerColors>()!;
+    return Theme.of(context).extension<ScrobblerColors>() ?? AppTheme.colors;
   }
 
   @override
@@ -101,7 +126,7 @@ class ScrobblerColors extends ThemeExtension<ScrobblerColors> {
 }
 
 abstract final class AppTheme {
-  static const _colors = ScrobblerColors(
+  static const colors = ScrobblerColors(
     surfaceRaised: AppPalette.surfaceRaised,
     surfaceHighest: AppPalette.surfaceHighest,
     outline: AppPalette.outline,
@@ -133,6 +158,8 @@ abstract final class AppTheme {
 
     const textTheme = TextTheme(
       displayLarge: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 42,
         fontWeight: FontWeight.w700,
@@ -140,6 +167,8 @@ abstract final class AppTheme {
         letterSpacing: -1.6,
       ),
       displaySmall: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 34,
         fontWeight: FontWeight.w700,
@@ -147,6 +176,8 @@ abstract final class AppTheme {
         letterSpacing: -1.2,
       ),
       headlineLarge: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 26,
         fontWeight: FontWeight.w700,
@@ -154,6 +185,8 @@ abstract final class AppTheme {
         letterSpacing: -0.8,
       ),
       headlineMedium: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 22,
         fontWeight: FontWeight.w600,
@@ -161,40 +194,49 @@ abstract final class AppTheme {
         letterSpacing: -0.4,
       ),
       titleLarge: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 18,
         fontWeight: FontWeight.w600,
         height: 1.2,
       ),
       titleMedium: TextStyle(
+        fontFamily: AppFonts.display,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 15,
         fontWeight: FontWeight.w600,
         height: 1.25,
       ),
       bodyLarge: TextStyle(
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 15,
         fontWeight: FontWeight.w400,
         height: 1.5,
       ),
       bodyMedium: TextStyle(
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paperMuted,
         fontSize: 13,
         fontWeight: FontWeight.w400,
         height: 1.45,
       ),
       labelLarge: TextStyle(
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paper,
         fontSize: 12,
         fontWeight: FontWeight.w600,
         letterSpacing: 0.2,
       ),
       labelSmall: TextStyle(
+        fontFamily: AppFonts.mono,
+        fontFeatures: AppFonts.tabular,
         color: AppPalette.paperMuted,
         fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.4,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 1.2,
       ),
     );
 
@@ -208,7 +250,7 @@ abstract final class AppTheme {
       splashFactory: NoSplash.splashFactory,
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      extensions: const [_colors],
+      extensions: const [colors],
       dividerTheme: const DividerThemeData(
         color: AppPalette.outline,
         thickness: 1,
@@ -220,7 +262,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(18)),
+          borderRadius: AppRadii.largeAll,
           side: BorderSide(color: AppPalette.outline),
         ),
       ),
@@ -230,15 +272,15 @@ abstract final class AppTheme {
         hintStyle: TextStyle(color: AppPalette.paperFaint),
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: AppRadii.smallAll,
           borderSide: BorderSide(color: AppPalette.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: AppRadii.smallAll,
           borderSide: BorderSide(color: AppPalette.lime),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: AppRadii.smallAll,
           borderSide: BorderSide(color: AppPalette.error),
         ),
       ),
@@ -266,10 +308,22 @@ abstract final class AppTheme {
           disabledForegroundColor: AppPalette.paperFaint,
           minimumSize: const Size(0, 40),
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.smallAll),
           textStyle: textTheme.labelLarge,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.smallAll),
+          side: const BorderSide(color: AppPalette.outline),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.smallAll),
+          side: const BorderSide(color: AppPalette.outline),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -277,9 +331,7 @@ abstract final class AppTheme {
           foregroundColor: AppPalette.paper,
           disabledForegroundColor: AppPalette.paperFaint,
           minimumSize: const Size.square(40),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.smallAll),
         ),
       ),
       scrollbarTheme: const ScrollbarThemeData(
@@ -290,7 +342,7 @@ abstract final class AppTheme {
       tooltipTheme: const TooltipThemeData(
         decoration: BoxDecoration(
           color: AppPalette.surfaceHighest,
-          borderRadius: BorderRadius.all(Radius.circular(8)),
+          borderRadius: AppRadii.smallAll,
           border: Border.fromBorderSide(BorderSide(color: AppPalette.outline)),
         ),
         textStyle: TextStyle(color: AppPalette.paper, fontSize: 12),

@@ -22,6 +22,10 @@ class LibraryCache extends ChangeNotifier {
   final _pending = <String, Future<Map<String, dynamic>>>{};
   int _revision = 0;
 
+  /// Library queries run against a possibly remote database, so they get far
+  /// more time than playback calls.
+  static const libraryTimeout = Duration(seconds: 30);
+
   Map<String, dynamic>? peek(String path) {
     final entry = _entries.remove(path);
     if (entry == null) return null;
@@ -43,7 +47,7 @@ class LibraryCache extends ChangeNotifier {
     final revision = _revision;
     late final Future<Map<String, dynamic>> request;
     request = api
-        .request('GET', path)
+        .request('GET', path, null, libraryTimeout)
         .then((data) {
           // Responses begun before invalidation must not repopulate the cache.
           if (revision == _revision) {

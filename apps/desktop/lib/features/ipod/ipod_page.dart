@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../controllers/scrobbler_controller.dart';
 import '../../models/scrobbler_state.dart';
 import '../../services/scrobbler_api.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
+import '../../widgets/page_heading.dart';
 import 'ipod_api.dart';
 
 class IpodPage extends StatefulWidget {
@@ -145,7 +148,7 @@ class _IpodPageState extends State<IpodPage> {
   static final _months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'
       .split(' ');
   String _date(DateTime time) =>
-      '${_weekdays[time.weekday - 1]} ${_months[time.month - 1]} ${time.day} · ${TimeOfDay.fromDateTime(time).format(context)}';
+      '${_weekdays[time.weekday - 1]} ${_months[time.month - 1]} ${time.day} · ${formatClock(time)}';
 
   @override
   Widget build(BuildContext context) {
@@ -159,16 +162,13 @@ class _IpodPageState extends State<IpodPage> {
     final selected = _selected;
     final locked = _busy || jobRunning;
     return ListView(
-      padding: const EdgeInsets.all(32),
+      padding: AppSpacing.page,
       children: [
-        Text('IPOD', style: theme.textTheme.labelSmall),
-        const SizedBox(height: 12),
-        Text('iPod plays', style: theme.textTheme.displaySmall),
-        const SizedBox(height: 12),
-        const Text(
-          'Plays from your iPod are saved as soon as it connects, before Apple Music can clear them. Review them here, then scrobble or discard.',
+        const PageHeading(
+          title: 'iPod plays',
+          subtitle:
+              'Plays from your iPod are saved as soon as it connects, before Apple Music can clear them. Review them here, then scrobble or discard.',
         ),
-        const SizedBox(height: 24),
         Wrap(
           spacing: 16,
           runSpacing: 12,
@@ -307,7 +307,7 @@ class _IpodPageState extends State<IpodPage> {
               subtitle: Text([play.artist, ?play.album].join(' · ')),
               secondary: Text(
                 '${play.estimated ? '~ ' : ''}${_date(play.playedAt)}',
-                style: theme.textTheme.bodySmall,
+                style: AppFonts.numeric(theme.textTheme.bodySmall),
               ),
             ),
           const SizedBox(height: 16),

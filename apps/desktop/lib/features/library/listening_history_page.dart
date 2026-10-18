@@ -2,6 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/scrobbler_api.dart';
 import '../../services/library_cache.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
+import '../../widgets/album_art.dart';
+import '../../widgets/page_heading.dart';
 import 'artist_detail_page.dart';
 import 'library_api.dart';
 import 'library_models.dart';
@@ -99,10 +103,9 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(32),
+    padding: AppSpacing.page,
     children: [
-      const LibraryHeading(
-        eyebrow: 'The archive',
+      const PageHeading(
         title: 'Listening history',
         subtitle: 'Search your synced listening history.',
       ),
@@ -125,7 +128,7 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
         LibraryFailure(error: _error!, retry: () => _load(force: true)),
       if (_data != null) ...[
         Text(
-          '${_data!.total} listens${_search.text.trim().isEmpty ? '' : ' matching your search'}',
+          '${formatCount(_data!.total)} listens${_search.text.trim().isEmpty ? '' : ' matching your search'}',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -144,18 +147,11 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.music_note,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 20,
-                  ),
+                AlbumArt(
+                  api: widget.api,
+                  artist: entry.artist,
+                  album: entry.album,
+                  size: 44,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -196,10 +192,17 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  _date(entry.date),
-                  textAlign: TextAlign.right,
-                  style: Theme.of(context).textTheme.bodySmall,
+                Tooltip(
+                  message: entry.date == null
+                      ? ''
+                      : formatFullDate(entry.date!),
+                  child: Text(
+                    entry.date == null
+                        ? 'Unknown date'
+                        : formatWhen(entry.date!),
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -235,7 +238,4 @@ class _ListeningHistoryPageState extends State<ListeningHistoryPage> {
       ],
     ],
   );
-  String _date(DateTime? date) => date == null
-      ? 'Unknown date'
-      : '${date.day}/${date.month}/${date.year}\n${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 }

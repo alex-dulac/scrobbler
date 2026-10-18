@@ -120,7 +120,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('123'), findsOneWidget);
+    // The scrobble total, and the same value labelling the peak month.
+    expect(find.text('123'), findsNWidgets(2));
     expect(find.text('2026'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

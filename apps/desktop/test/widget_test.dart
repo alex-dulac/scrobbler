@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:py_scrobbler_desktop/controllers/scrobbler_controller.dart';
+import 'package:py_scrobbler_desktop/features/listening/listening_page.dart';
 import 'package:py_scrobbler_desktop/screens/dashboard_screen.dart';
 import 'package:py_scrobbler_desktop/services/scrobbler_api.dart';
 import 'package:py_scrobbler_desktop/services/library_cache.dart';
@@ -150,9 +151,20 @@ void main() {
           .value,
       closeTo(40 / 90, 0.0001),
     );
-    await tester.tap(find.byTooltip('Session'));
-    await tester.pumpAndSettle();
+    // The session queue now lives on the Listening page.
+    await tester.scrollUntilVisible(
+      find.text('Your queue is clear.'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListeningPage),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text('Your queue is clear.'), findsOneWidget);
+    expect(find.byTooltip('Session'), findsNothing);
+    expect(find.byTooltip('Overview'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
@@ -221,7 +233,7 @@ void main() {
     await tester.pumpAndSettle();
     final offset = position.pixels;
     final count = requests.where((u) => u.path == '/library/history/').length;
-    await tester.tap(find.byTooltip('Session'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('History'));
     await tester.pumpAndSettle();

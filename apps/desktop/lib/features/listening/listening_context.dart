@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/scrobbler_state.dart';
 import '../../services/scrobbler_api.dart';
 import '../../services/library_cache.dart';
+import '../../theme/app_theme.dart';
+import '../../theme/format.dart';
 import 'listening_timeline.dart';
 
 /// Listening history for the current recording, displayed without navigation.
@@ -132,7 +134,7 @@ class _ListeningContextState extends State<ListeningContext> {
               .map(
                 (value) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Text(_date(value, time: true)),
+                  child: _RecentListen(value),
                 ),
               ),
         ],
@@ -220,27 +222,23 @@ class _ListeningContextState extends State<ListeningContext> {
 int _count(Map<String, dynamic> value) =>
     (value['total_scrobbles'] as num?)?.toInt() ?? 0;
 List<dynamic> _rows(Object? value) => value is List ? value : const [];
-String _date(Object? value, {bool time = false}) {
+String _date(Object? value) {
   final date = DateTime.tryParse('$value')?.toLocal();
-  if (date == null) return '—';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  final day = '${months[date.month - 1]} ${date.day}, ${date.year}';
-  return time
-      ? '$day · ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}'
-      : day;
+  return date == null ? '—' : formatDate(date);
+}
+
+class _RecentListen extends StatelessWidget {
+  const _RecentListen(this.value);
+  final Object? value;
+  @override
+  Widget build(BuildContext context) {
+    final date = DateTime.tryParse('$value')?.toLocal();
+    if (date == null) return const Text('—');
+    return Tooltip(
+      message: formatFullDate(date),
+      child: Text(formatWhen(date)),
+    );
+  }
 }
 
 class _Panel extends StatelessWidget {
@@ -253,8 +251,8 @@ class _Panel extends StatelessWidget {
     width: double.infinity,
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      border: Border.all(color: Theme.of(context).colorScheme.outline),
-      borderRadius: BorderRadius.circular(8),
+      color: ScrobblerColors.of(context).surfaceRaised,
+      borderRadius: AppRadii.largeAll,
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,7 +284,10 @@ class _Metric extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 8,
       children: [
-        Text('$value', style: Theme.of(context).textTheme.headlineMedium),
+        Text(
+          formatCount(value),
+          style: Theme.of(context).textTheme.headlineMedium,
+        ),
         Text(label),
       ],
     ),
@@ -303,7 +304,10 @@ class _DateRow extends StatelessWidget {
     child: Row(
       children: [
         Expanded(child: Text(label)),
-        Text(_date(value)),
+        Text(
+          _date(value),
+          style: AppFonts.numeric(Theme.of(context).textTheme.bodyMedium),
+        ),
       ],
     ),
   );
@@ -348,13 +352,19 @@ class _Rankings extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('$count'),
+                  Text(
+                    formatCount(count),
+                    style: AppFonts.numeric(
+                      Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 5),
               LinearProgressIndicator(
                 value: (count / maximum).clamp(0, 1),
                 minHeight: 3,
+                borderRadius: AppRadii.smallAll,
                 color: Theme.of(context).colorScheme.primary,
                 backgroundColor: Theme.of(
                   context,
