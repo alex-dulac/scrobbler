@@ -2,7 +2,7 @@ from datetime import datetime
 from itertools import batched
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,19 +53,34 @@ class IPodRepository(BaseRepository):
 
         return inserted
 
+    @staticmethod
+    def _pending(since: datetime):
+        return (
+            IpodPlay.scrobbled_at.is_(None),
+            IpodPlay.discarded_at.is_(None),
+            IpodPlay.played_at >= since,
+        )
+
     async def get_pending_plays(self, since: datetime) -> list[IpodPlay]:
         """Plays since the given time that have been neither scrobbled nor discarded."""
+        query = select(IpodPlay).where(*self._pending(since)).order_by(IpodPlay.played_at)
+        result = await self.execute(query)
+        return result.scalars().all()
+
+    async def get_pending_plays_by_id(self, play_ids: list[int], since: datetime) -> list[IpodPlay]:
+        """The given plays, skipping any already scrobbled, discarded, or older than since."""
         query = (
             select(IpodPlay)
-            .where(
-                IpodPlay.scrobbled_at.is_(None),
-                IpodPlay.discarded_at.is_(None),
-                IpodPlay.played_at >= since,
-            )
+            .where(IpodPlay.id.in_(play_ids), *self._pending(since))
             .order_by(IpodPlay.played_at)
         )
         result = await self.execute(query)
         return result.scalars().all()
+
+    async def count_pending_plays(self, since: datetime) -> int:
+        query = select(func.count()).select_from(IpodPlay).where(*self._pending(since))
+        result = await self.execute(query)
+        return result.scalar_one()
 
     async def mark_scrobbled(self, play_id: int, scrobbled_at: datetime) -> None:
         query = update(IpodPlay).where(IpodPlay.id == play_id).values(scrobbled_at=scrobbled_at)

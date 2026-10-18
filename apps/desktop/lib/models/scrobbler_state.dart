@@ -38,6 +38,31 @@ class ListenerProfile {
   final String name, playcount, artists, albums;
 }
 
+class IpodStatus {
+  IpodStatus.fromJson(Map<String, dynamic> json)
+    : connected = json['connected'] == true,
+      name = json['name'] as String?,
+      captureId = _count(json['capture_id']),
+      lastCaptured = _count(json['last_captured']),
+      error = json['error'] as String?,
+      pendingCount = _count(json['pending_count']),
+      jobId = _count(object(json['job'])['id']),
+      jobRunning = object(json['job'])['running'] == true,
+      jobTotal = _count(object(json['job'])['total']),
+      jobScrobbled = _count(object(json['job'])['scrobbled']),
+      jobFailed = _count(object(json['job'])['failed']),
+      jobError = object(json['job'])['error'] as String?;
+
+  final bool connected, jobRunning;
+  final String? name, error, jobError;
+  // captureId and jobId increase with each capture and scrobble job, so a
+  // change means there is something new to announce.
+  final int captureId, lastCaptured, pendingCount;
+  final int jobId, jobTotal, jobScrobbled, jobFailed;
+
+  static int _count(Object? value) => value is num ? value.toInt() : 0;
+}
+
 class ScrobblerState {
   ScrobblerState.fromJson(Map<String, dynamic> json)
     : currentTrack = json['current_song'] == null
@@ -53,7 +78,8 @@ class ScrobblerState {
           ? null
           : ListenerProfile.fromJson(object(json['user'])),
       scrobbles = _tracks(object(json['session'])['scrobbles']),
-      pending = _tracks(object(json['session'])['pending']);
+      pending = _tracks(object(json['session'])['pending']),
+      ipod = IpodStatus.fromJson(object(json['ipod']));
 
   final ScrobbleTrack? currentTrack;
   final bool scrobbleEnabled, isScrobbling, databaseAvailable;
@@ -61,6 +87,7 @@ class ScrobblerState {
   final String? artworkUrl;
   final ListenerProfile? profile;
   final List<ScrobbleTrack> scrobbles, pending;
+  final IpodStatus ipod;
 
   static List<ScrobbleTrack> _tracks(Object? values) => values is List
       ? values

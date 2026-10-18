@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from core.security import token_auth
-from library.dependencies import get_scrobbler_runtime
+from library.dependencies import get_ipod_watcher, get_scrobbler_runtime
 from library.integrations import Integration, PlaybackAction
 from routers.spotify_router import spotify_router
 from routers.scrobble_router import scrobble_router
@@ -14,7 +14,9 @@ from routers.user_router import user_router
 from routers.library_router import library_router
 from routers.manual_router import manual_router
 from routers.artwork_router import artwork_router
+from routers.ipod_router import ipod_router
 from services.apple_music_service import get_current_track_artwork_data
+from services.ipod_watcher import IpodWatcher
 from services.scrobbler_runtime import ScrobblerRuntime
 
 
@@ -60,6 +62,7 @@ router.include_router(user_router)
 router.include_router(library_router)
 router.include_router(manual_router)
 router.include_router(artwork_router)
+router.include_router(ipod_router)
 
 
 @router.get("/poll-song/")
@@ -92,6 +95,7 @@ async def get_current_song_artwork(
 @router.get("/state/")
 async def state(
     runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
+    ipod: IpodWatcher = Depends(get_ipod_watcher),
 ):
     snapshot = runtime.snapshot()
     current_song = None
@@ -109,6 +113,7 @@ async def state(
         "session": snapshot.session,
         "database_available": runtime.engine.database_available,
         "runtime_state": runtime.state.value,
+        "ipod": ipod.status(),
     }
 
 
