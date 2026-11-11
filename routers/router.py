@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from core.security import token_auth
-from library.dependencies import get_ipod_watcher, get_scrobbler_runtime
+from library.dependencies import get_ipod_watcher, get_scrobbler_runtime, get_sync_service
 from library.integrations import Integration, PlaybackAction
 from routers.spotify_router import spotify_router
 from routers.scrobble_router import scrobble_router
@@ -19,6 +19,7 @@ from repositories.listening_cache import listening_cache
 from services.apple_music_service import get_current_track_artwork_data
 from services.ipod_watcher import IpodWatcher
 from services.scrobbler_runtime import ScrobblerRuntime
+from services.sync_service import SyncService
 
 
 class IntegrationName(str, Enum):
@@ -97,6 +98,7 @@ async def get_current_song_artwork(
 async def state(
     runtime: ScrobblerRuntime = Depends(get_scrobbler_runtime),
     ipod: IpodWatcher = Depends(get_ipod_watcher),
+    sync: SyncService = Depends(get_sync_service),
 ):
     snapshot = runtime.snapshot()
     current_song = None
@@ -118,6 +120,7 @@ async def state(
         "library_revision": listening_cache.revision,
         "runtime_state": runtime.state.value,
         "ipod": ipod.status(),
+        "sync": sync.status(),
     }
 
 

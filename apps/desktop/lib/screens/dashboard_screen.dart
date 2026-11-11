@@ -7,6 +7,7 @@ import '../features/ipod/ipod_page.dart';
 import '../features/manual/manual_album_page.dart';
 import '../features/overview/overview_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/sync/sync_page.dart';
 import '../theme/app_theme.dart';
 import '../theme/format.dart';
 import '../widgets/album_art.dart';
@@ -36,12 +37,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     (label: 'Wrapped', icon: Icons.auto_awesome_rounded, section: null),
     (label: 'Add a listen', icon: Icons.library_add_rounded, section: 'Import'),
     (label: 'iPod', icon: Icons.album_rounded, section: null),
+    (label: 'Last.fm sync', icon: Icons.sync_rounded, section: null),
     (label: 'Settings', icon: Icons.tune_rounded, section: null),
   ];
   static const _listeningPage = 0;
   static const _wrappedPage = 3;
   static const _ipodPage = 5;
-  static const _settingsPage = 6;
+  static const _syncPage = 6;
+  static const _settingsPage = 7;
 
   void _open(int page) {
     setState(() {
@@ -63,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _wrappedPage => WrappedPage(api: controller.api),
       4 => ManualAlbumPage(api: controller.api),
       _ipodPage => IpodPage(controller: controller),
+      _syncPage => SyncPage(controller: controller),
       _ => SettingsPage(controller: controller),
     };
   }

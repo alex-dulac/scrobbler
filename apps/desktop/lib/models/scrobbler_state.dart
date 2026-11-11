@@ -63,6 +63,27 @@ class IpodStatus {
   static int _count(Object? value) => value is num ? value.toInt() : 0;
 }
 
+/// The backend's Last.fm scrobble sync job.
+class SyncStatus {
+  SyncStatus.fromJson(Map<String, dynamic> json)
+    : id = _count(json['id']),
+      running = json['running'] == true,
+      timeFrom = DateTime.tryParse('${json['time_from']}'),
+      timeTo = DateTime.tryParse('${json['time_to']}'),
+      fetched = _count(json['fetched']),
+      saved = _count(json['saved']),
+      error = json['error'] as String?;
+
+  // id increases with each sync, so a change means a new one started.
+  final int id, fetched, saved;
+  final bool running;
+  // Both days are included; null means all history or through today.
+  final DateTime? timeFrom, timeTo;
+  final String? error;
+
+  static int _count(Object? value) => value is num ? value.toInt() : 0;
+}
+
 class ScrobblerState {
   ScrobblerState.fromJson(Map<String, dynamic> json)
     : currentTrack = json['current_song'] == null
@@ -80,7 +101,8 @@ class ScrobblerState {
           : ListenerProfile.fromJson(object(json['user'])),
       scrobbles = _tracks(object(json['session'])['scrobbles']),
       pending = _tracks(object(json['session'])['pending']),
-      ipod = IpodStatus.fromJson(object(json['ipod']));
+      ipod = IpodStatus.fromJson(object(json['ipod'])),
+      sync = SyncStatus.fromJson(object(json['sync']));
 
   final ScrobbleTrack? currentTrack;
   final bool scrobbleEnabled, isScrobbling, databaseAvailable;
@@ -91,6 +113,7 @@ class ScrobblerState {
   final ListenerProfile? profile;
   final List<ScrobbleTrack> scrobbles, pending;
   final IpodStatus ipod;
+  final SyncStatus sync;
 
   static List<ScrobbleTrack> _tracks(Object? values) => values is List
       ? values

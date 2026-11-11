@@ -19,10 +19,16 @@ class Scrobble(BaseTable):
     album_name = Column(String, nullable=True)
     scrobbled_at = Column(DateTime, default=datetime.now, index=True, nullable=False)
 
-    # Library lookups match names case-insensitively.
+    # Library lookups match names case-insensitively, and so does the one-scrobble-per-play
+    # rule that inserts rely on to skip scrobbles already saved.
     __table_args__ = (
         Index("ix_scrobbles_lower_artist_name", func.lower(artist_name)),
         Index("ix_scrobbles_lower_track_name", func.lower(track_name)),
+        Index(
+            "ux_scrobbles_track_artist_time",
+            func.lower(track_name), func.lower(artist_name), scrobbled_at,
+            unique=True,
+        ),
     )
 
     def __repr__(self):

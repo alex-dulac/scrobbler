@@ -105,7 +105,7 @@ The dashboard now includes:
 History, artist detail, and Wrapped use the existing synced database, not the
 entire Last.fm account automatically. If it is unavailable, these pages show an
 error and retry action. Configure PostgreSQL and restart the backend to reconnect.
-Use the existing `scripts.sync_scrobbles` workflow to import older listening data.
+Use **Last.fm sync** in the sidebar to import scrobbles made elsewhere, such as on your phone, or older listening data. The `scripts.sync_scrobbles` script does the same from the command line.
 
 Visited tabs retain their search, selected page/year, and scroll position until
 the app closes. Library responses share a bounded in-memory cache (80 entries,

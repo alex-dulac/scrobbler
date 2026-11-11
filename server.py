@@ -10,7 +10,7 @@ from loguru import logger
 
 from core import config
 from core.database import session_manager
-from library.dependencies import get_ipod_watcher, get_scrobbler_runtime
+from library.dependencies import get_ipod_watcher, get_scrobbler_runtime, get_sync_service
 from routers.router import router
 
 
@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
     finally:
         if ipod_watcher is not None:
             await ipod_watcher.stop()
+        await (await get_sync_service()).stop()
         if profile_task is not None:
             profile_task.cancel()
             with suppress(asyncio.CancelledError):

@@ -52,7 +52,10 @@ class ScrobblerController extends ChangeNotifier {
       if (previous != null) _invalidateLibrary(previous, snapshot);
       connected = true;
       error = null;
-      if (previous != null) _announceIpod(previous.ipod, snapshot.ipod);
+      if (previous != null) {
+        _announceIpod(previous.ipod, snapshot.ipod);
+        _announceSync(previous.sync, snapshot.sync);
+      }
     } catch (exception) {
       if (_disposed || generation != _generation) return;
       connected = false;
@@ -87,8 +90,11 @@ class ScrobblerController extends ChangeNotifier {
       cache.invalidate();
       return;
     }
-    // iPod jobs write many plays; their completion refreshes everything.
-    if (written == 0 || current.ipod.jobRunning) return;
+    // iPod and sync jobs write many plays; their completion refreshes
+    // everything.
+    if (written == 0 || current.ipod.jobRunning || current.sync.running) {
+      return;
+    }
     if (written > _uncommitted.length) {
       // Writes from outside the session list, so their contents are unknown.
       _uncommitted.clear();
@@ -138,6 +144,22 @@ class ScrobblerController extends ChangeNotifier {
         opensIpod: failed > 0,
       );
     }
+  }
+
+  void _announceSync(SyncStatus previous, SyncStatus current) {
+    final finished =
+        current.id > 0 &&
+        !current.running &&
+        (previous.running || previous.id != current.id);
+    if (!finished) return;
+    // Synced scrobbles bypass the session list that targets invalidation.
+    _uncommitted.clear();
+    LibraryCache.forApi(api).invalidate();
+    _showNotice(
+      current.error ??
+          'Synced from Last.fm: ${current.saved} new of ${current.fetched} scrobbles.',
+      failed: current.error != null,
+    );
   }
 
   void _clearNotice() {

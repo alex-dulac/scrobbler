@@ -22,7 +22,7 @@ from core import config
 from core.database import get_db
 from library.dependencies import get_lastfm_service, get_sync_service
 from library.session_scrobbles import SessionScrobbles
-from models.db import IpodPlay, Scrobble
+from models.db import IpodPlay
 from models.schemas import Track, LastFmTrack
 from repositories.filters import ScrobbleFilter
 from repositories.scrobble_repo import ScrobbleRepository
@@ -566,13 +566,12 @@ class ManualScrobbleWidget(BaseDbWidget):
             try:
                 scrobbled_track = await self.lastfm_service.scrobble(t, t.time_to_scrobble)
                 if scrobbled_track:
-                    db_obj = Scrobble(
-                        track_name=scrobbled_track.name,
-                        artist_name=scrobbled_track.artist,
-                        album_name=scrobbled_track.album,
-                        scrobbled_at=scrobbled_track.scrobbled_at,
-                    )
-                    to_db.append(db_obj)
+                    to_db.append({
+                        "track_name": scrobbled_track.name,
+                        "artist_name": scrobbled_track.artist,
+                        "album_name": scrobbled_track.album,
+                        "scrobbled_at": scrobbled_track.scrobbled_at,
+                    })
                     successful_count += 1
                 else:
                     self.notify(f"Failed to scrobble: {t.display_name}", severity="warning")
@@ -587,8 +586,8 @@ class ManualScrobbleWidget(BaseDbWidget):
 
             try:
                 repo = ScrobbleRepository()
-                await repo.add_and_commit(to_db)
-                self.notify(f"✓ Scrobbled and saved {len(to_db)} tracks to database")
+                saved = await repo.insert_scrobbles(to_db)
+                self.notify(f"✓ Scrobbled and saved {saved} tracks to database")
             except Exception as e:
                 self._handle_db_error()
                 self.notify(f"Error saving to database: {str(e)}", severity="error")

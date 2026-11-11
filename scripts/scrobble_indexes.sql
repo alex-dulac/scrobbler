@@ -22,3 +22,8 @@ create index concurrently if not exists ix_scrobbles_album_name_trgm on scrobble
 -- "We Are The Union") count as one; the plain name indexes can't serve that.
 create index concurrently if not exists ix_scrobbles_lower_artist_name on scrobbles (lower(artist_name));
 create index concurrently if not exists ix_scrobbles_lower_track_name on scrobbles (lower(track_name));
+
+-- One scrobble per track, artist, and second, matching how sync recognizes scrobbles
+-- it already has. Fails while duplicates exist; delete all but the lowest id of each first.
+create unique index concurrently if not exists ux_scrobbles_track_artist_time
+    on scrobbles (lower(track_name), lower(artist_name), scrobbled_at);

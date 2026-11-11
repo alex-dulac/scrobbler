@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pylast import PlayedTrack
-from sqlalchemy import select, func, desc, extract, tuple_
+from sqlalchemy import select, func, desc, extract
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.db import (
@@ -39,14 +39,34 @@ class ScrobbleRepository(BaseRepository):
         result = await self.execute(query)
         return result.scalars().all()
 
-    async def add_scrobble(self, lastfm_track: LastFmTrack):
-        db_scrobble = Scrobble(
-            artist_name=lastfm_track.artist,
-            album_name=lastfm_track.album,
-            track_name=lastfm_track.name,
-            scrobbled_at=lastfm_track.scrobbled_at
-        )
-        await self.add_and_commit(db_scrobble)
+    async def insert_scrobbles(self, scrobbles: list[dict[str, Any]]) -> int:
+        """
+        Insert scrobbles (dicts of Scrobble columns), skipping any that match an existing
+        scrobble on lower(track_name), lower(artist_name) and scrobbled_at.
+        Returns how many were new.
+        """
+        if not scrobbles:
+            return 0
+
+        query = pg_insert(Scrobble).values(scrobbles).on_conflict_do_nothing().returning(Scrobble.id)
+        try:
+            async with self._get_session() as session:
+                result = await session.execute(query)
+                inserted = len(result.all())
+                await session.commit()
+                return inserted
+        finally:
+            # Clear even on failure: the commit may have landed before the error.
+            listening_cache.invalidate()
+
+    async def add_scrobble(self, lastfm_track: LastFmTrack) -> bool:
+        """Save a scrobble; False if the database already had it."""
+        return await self.insert_scrobbles([{
+            "artist_name": lastfm_track.artist,
+            "album_name": lastfm_track.album,
+            "track_name": lastfm_track.name,
+            "scrobbled_at": lastfm_track.scrobbled_at,
+        }]) > 0
 
     async def get_artists_from_scrobbles(self) -> Any:
         query = (
@@ -151,49 +171,6 @@ class ScrobbleRepository(BaseRepository):
         )
         result = await self.execute(query)
         return result.all()
-
-    async def get_scrobbles_batch(self, track_data: list[PlayedTrack]) -> list[Scrobble]:
-        """
-        Efficiently check for existing scrobbles in a sync batch.
-
-        Args:
-            track_data: List of PlayedTrack objects from Last.fm API
-
-        Returns:
-            List of Scrobble objects that already exist in the database
-        """
-        if not track_data:
-            return []
-
-        lookup_keys = set()
-
-        for t in track_data:
-            track_name = t.track.title
-            artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
-            timestamp = int(t.timestamp)
-            scrobbled_at = datetime.fromtimestamp(timestamp)
-
-            lookup_keys.add((
-                track_name.lower(),
-                artist_name.lower(),
-                scrobbled_at,
-            ))
-
-        if not lookup_keys:
-            return []
-
-        query = (
-            select(Scrobble)
-            .where(
-                tuple_(
-                    func.lower(Scrobble.track_name),
-                    func.lower(Scrobble.artist_name),
-                    Scrobble.scrobbled_at,
-                ).in_(lookup_keys)
-            )
-        )
-        result = await self.execute(query)
-        return result.scalars().all()
 
     async def get_scrobbles_like_track(self, track_name: str, artist_name: str) -> Any:
         # If we passed in "Song Name", ideally we would get results like

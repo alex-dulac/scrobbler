@@ -1,4 +1,7 @@
 import asyncio
+from collections.abc import Callable
+from contextlib import suppress
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from loguru import logger
@@ -11,6 +14,32 @@ from repositories.scrobble_repo import ScrobbleRepository
 from library.utils import lastfm_friendly, clean_up_title
 
 
+# pylast asks for one more than the limit (in case of a now playing track), and Last.fm
+# pages hold 200, so 199 keeps each fetch to a single request.
+PAGE_SIZE = 199
+
+
+class SyncBusyError(RuntimeError):
+    """A scrobble sync is already running."""
+
+
+@dataclass(slots=True)
+class ScrobbleSyncJob:
+    # increments per job so clients can tell a finished job from the previous one
+    id: int = 0
+    running: bool = False
+    time_from: str | None = None
+    time_to: str | None = None
+    fetched: int = 0
+    saved: int = 0
+    error: str | None = None
+
+
+def _day_start(day: str | None) -> int | None:
+    """Local midnight at the start of a YYYY-MM-DD day, as a Unix timestamp."""
+    return int(datetime.strptime(day, "%Y-%m-%d").timestamp()) if day else None
+
+
 class SyncService:
     """
     Service to sync data from Last.fm API into the database.
@@ -19,25 +48,69 @@ class SyncService:
     def __init__(self):
         self.scrobble_repo = ScrobbleRepository()
         self.ref_data_repo = ReferenceDataRepository()
+        self._job_task: asyncio.Task | None = None
+        self.job = ScrobbleSyncJob()
 
-    async def sync_scrobbles(self, time_from: str = None, time_to: str = None, clean: bool = True) -> dict[str, int]:
+    def status(self) -> dict:
+        return asdict(self.job)
+
+    def start_scrobble_sync(self, time_from: str | None = None, time_to: str | None = None) -> None:
+        """Sync scrobbles in the background; clients follow progress through status()."""
+        if self.job.running:
+            raise SyncBusyError("Scrobbles are already being synced.")
+        # Reject bad dates now rather than in the background task
+        _day_start(time_from)
+        _day_start(time_to)
+
+        job = self.job = ScrobbleSyncJob(id=self.job.id + 1, running=True, time_from=time_from, time_to=time_to)
+        self._job_task = asyncio.create_task(self._run_scrobble_sync(job), name="scrobble-sync")
+
+    async def _run_scrobble_sync(self, job: ScrobbleSyncJob) -> None:
+        def progress(fetched: int, saved: int) -> None:
+            job.fetched, job.saved = fetched, saved
+
+        try:
+            await self.sync_scrobbles(job.time_from, job.time_to, on_progress=progress)
+        except Exception as e:
+            logger.exception(f"Scrobble sync stopped: {e}")
+            job.error = f"Scrobble sync stopped: {e}"
+        finally:
+            job.running = False
+
+    async def stop(self) -> None:
+        # Batches already saved stay saved; a later sync skips them
+        if self._job_task is not None:
+            self._job_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._job_task
+            self._job_task = None
+
+    async def sync_scrobbles(
+            self,
+            time_from: str = None,
+            time_to: str = None,
+            clean: bool = True,
+            on_progress: Callable[[int, int], None] | None = None,
+    ) -> dict[str, int]:
+        """
+        Save Last.fm scrobbles from time_from through time_to (YYYY-MM-DD, both days included)
+        that the database doesn't have yet, walking backwards from time_to a page at a time.
+        """
         from library.dependencies import get_lastfm_service
 
         lastfm_service = await get_lastfm_service()
         fetched = 0
         saved = 0
-        time_from = int(datetime.strptime(time_from, "%Y-%m-%d").timestamp()) if time_from else None
-        time_to = int(datetime.strptime(time_to, "%Y-%m-%d").timestamp()) if time_to else None
-        if not time_to:
-            time_to = int(datetime.now().timestamp())
+        time_from = _day_start(time_from)
+        # The end date is inclusive, so stop before the following midnight
+        time_to = _day_start(time_to) + 86400 if time_to else int(datetime.now().timestamp()) + 1
 
         while True:
-            if time_from and time_to and time_from >= time_to:
+            if time_from and time_from >= time_to:
                 logger.info("Reached the specified time_from limit. Stopping sync.")
                 break
 
-            batch_scrobbles = []
-            tracks = await lastfm_service.get_user_played_tracks_by_time_to(time_to, 200)
+            tracks = await lastfm_service.get_user_played_tracks_by_time_to(time_to, PAGE_SIZE, time_from=time_from)
 
             if not tracks:
                 logger.info("No more tracks to fetch. Sync complete.")
@@ -46,40 +119,32 @@ class SyncService:
             fetched += len(tracks)
             logger.info(f"Fetched {fetched} scrobbles...")
 
-            # Query once for all existing scrobbles in this batch
-            existing_scrobbles = await self.scrobble_repo.get_scrobbles_batch(tracks)
-            existing_set = {(s.track_name.lower(), s.artist_name.lower(), s.scrobbled_at) for s in existing_scrobbles}
-
+            batch = {}
             for t in tracks:
                 track_name = clean_up_title(t.track.title) if clean else t.track.title
                 artist_name = t.track.artist.name if t.track.artist else "Unknown Artist"
                 album_name = clean_up_title(t.album) if clean and t.album else t.album
                 scrobbled_at = datetime.fromtimestamp(int(t.timestamp))
+                # Same identity as the database's unique index, so a page never repeats a row
+                batch.setdefault((track_name.lower(), artist_name.lower(), scrobbled_at), {
+                    "track_name": track_name,
+                    "artist_name": artist_name,
+                    "album_name": album_name,
+                    "scrobbled_at": scrobbled_at,
+                })
 
-                # O(1) lookup in set
-                if (track_name.lower(), artist_name.lower(), scrobbled_at) in existing_set:
-                    logger.info(f"Scrobble already exists in DB: {artist_name} - {track_name} at {scrobbled_at}. Skipping.")
-                    continue
+            # The unique index skips scrobbles already saved, under their cleaned titles
+            new = await self.scrobble_repo.insert_scrobbles(list(batch.values()))
+            saved += new
+            logger.info(f"Saved {new} new scrobbles; {len(batch) - new} were already in the database.")
 
-                logger.info(f"Adding scrobble to DB: {artist_name} - {track_name} at {scrobbled_at}.")
-                scrobble = db_models.Scrobble(
-                    track_name=track_name,
-                    artist_name=artist_name,
-                    album_name=album_name,
-                    scrobbled_at=scrobbled_at,
-                    created_at=datetime.now()
-                )
-                batch_scrobbles.append(scrobble)
+            if on_progress:
+                on_progress(fetched, saved)
 
-            if len(batch_scrobbles) > 0:
-                await self.scrobble_repo.add_and_commit(batch_scrobbles)
-                saved += len(batch_scrobbles)
-                logger.info(f"Saved {len(batch_scrobbles)} new scrobbles to the database.")
-            else:
-                logger.info("No new scrobbles to save from this batch.")
-
-            # update time_to to the oldest timestamp from this batch
-            time_to = int(tracks[-1].timestamp)
+            # Last.fm's time_to is exclusive. Overlap the oldest second so scrobbles that share it
+            # but didn't fit in this page aren't skipped, unless that would fetch this page again.
+            oldest = int(tracks[-1].timestamp)
+            time_to = oldest + 1 if oldest + 1 < time_to else oldest
             await asyncio.sleep(0.5)
 
         logger.info(f"Done. Total fetched: {fetched}. Total saved: {saved}.")
