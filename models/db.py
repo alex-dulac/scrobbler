@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, Index, UniqueConstraint, func
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -18,6 +18,12 @@ class Scrobble(BaseTable):
     artist_name = Column(String, index=True, nullable=False)
     album_name = Column(String, nullable=True)
     scrobbled_at = Column(DateTime, default=datetime.now, index=True, nullable=False)
+
+    # Library lookups match names case-insensitively.
+    __table_args__ = (
+        Index("ix_scrobbles_lower_artist_name", func.lower(artist_name)),
+        Index("ix_scrobbles_lower_track_name", func.lower(track_name)),
+    )
 
     def __repr__(self):
         return f"<Scrobble(track_name='{self.track_name}', artist_name='{self.artist_name}')>"

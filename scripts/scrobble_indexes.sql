@@ -17,3 +17,8 @@ create extension if not exists pg_trgm;
 create index concurrently if not exists ix_scrobbles_track_name_trgm on scrobbles using gin (track_name gin_trgm_ops);
 create index concurrently if not exists ix_scrobbles_artist_name_trgm on scrobbles using gin (artist_name gin_trgm_ops);
 create index concurrently if not exists ix_scrobbles_album_name_trgm on scrobbles using gin (album_name gin_trgm_ops);
+
+-- Library lookups compare lower(name) so casing variants ("We Are the Union" /
+-- "We Are The Union") count as one; the plain name indexes can't serve that.
+create index concurrently if not exists ix_scrobbles_lower_artist_name on scrobbles (lower(artist_name));
+create index concurrently if not exists ix_scrobbles_lower_track_name on scrobbles (lower(track_name));

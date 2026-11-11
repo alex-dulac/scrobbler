@@ -146,13 +146,14 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('scrobbles.scrobbled_at >=', query)
             self.assertIn('scrobbles.scrobbled_at <', query)
             self.assertNotIn('EXTRACT(year', query)
-        self.assertTrue(any('SELECT DISTINCT scrobbles.artist_name AS artist_name, scrobbles.track_name' in query for query in sql))
-        self.assertTrue(any('SELECT DISTINCT scrobbles.artist_name AS artist_name, scrobbles.album_name' in query for query in sql))
+        self.assertTrue(any('SELECT DISTINCT lower(scrobbles.artist_name) AS lower_1, lower(scrobbles.track_name)' in query for query in sql))
+        self.assertTrue(any('SELECT DISTINCT lower(scrobbles.artist_name) AS lower_1, lower(scrobbles.album_name)' in query for query in sql))
         tracks = sql[-1]
-        self.assertIn('GROUP BY scrobbles.track_name, scrobbles.artist_name', tracks)
-        self.assertNotIn('GROUP BY scrobbles.track_name, scrobbles.artist_name, scrobbles.album_name', tracks)
+        self.assertIn('GROUP BY lower(scrobbles.track_name), lower(scrobbles.artist_name)', tracks)
+        self.assertNotIn('lower(scrobbles.album_name)', tracks)
+        self.assertIn('mode() WITHIN GROUP (ORDER BY scrobbles.track_name)', tracks)
 
-    async def test_artist_scope_is_exact_and_parameterized(self):
+    async def test_artist_scope_ignores_case_and_is_parameterized(self):
         repo = ListeningRepository()
         statements = []
 
@@ -173,7 +174,7 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
         await repo.artist("Artist' OR 1=1")
         for statement in statements:
             compiled = statement.compile(dialect=postgresql.dialect())
-            self.assertIn('scrobbles.artist_name =', str(compiled))
+            self.assertIn('lower(scrobbles.artist_name) = lower(', str(compiled))
             self.assertNotIn("Artist'", str(compiled))
             self.assertIn("Artist' OR 1=1", compiled.params.values())
 
@@ -218,7 +219,8 @@ class ListeningQueryTests(unittest.IsolatedAsyncioTestCase):
             if columns[0][1] != 'name' or len(columns) != 1:
                 return []
             return [{'name': 'Kept', 'count': 9}, {'name': 'New', 'count': 5}] if year == 2026 else [
-                {'name': 'Gone', 'count': 9}, {'name': 'Kept', 'count': 4}]
+                # Last year's most-scrobbled spelling differed only in case.
+                {'name': 'Gone', 'count': 9}, {'name': 'KEPT', 'count': 4}]
 
         repo._ranking = ranking
         summary = await repo.wrapped(2026)

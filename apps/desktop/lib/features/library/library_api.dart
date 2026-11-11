@@ -63,7 +63,9 @@ class LibraryApi {
         return day == null ||
             (day.month == at.month && day.day == at.day && day.year > at.year);
       case 'artists' || 'context':
-        return path.queryParameters['artist'] == artist;
+        // The backend matches artists case-insensitively.
+        return path.queryParameters['artist']?.toLowerCase() ==
+            artist.toLowerCase();
       default:
         return true;
     }

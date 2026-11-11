@@ -1,7 +1,9 @@
 """Bounded, read-only queries for the desktop listening library.
 
 Dates follow the existing database's naive datetime convention. Track identity is
-artist + title; album metadata does not split a track's listening count.
+artist + title; album metadata does not split a track's listening count. Names are
+compared case-insensitively, since sources disagree on casing ("We Are the Union"
+vs "We Are The Union"); grouped rows show each name's most-scrobbled spelling.
 """
 import asyncio
 from bisect import bisect_right
@@ -12,6 +14,15 @@ from sqlalchemy import Date, and_, cast, extract, func, or_, select
 from models.db import Scrobble as S
 from repositories.base import BaseRepository
 from repositories.listening_cache import listening_cache
+
+
+def _same(column, value):
+    return func.lower(column) == func.lower(value)
+
+
+def _spelling(column):
+    """The most-scrobbled spelling within a case-insensitive group."""
+    return func.mode().within_group(column)
 
 
 class ListeningRepository(BaseRepository):
@@ -31,7 +42,8 @@ class ListeningRepository(BaseRepository):
 
     async def _count(self, *conditions, columns=()):
         if columns:
-            source = select(*columns).where(*conditions).distinct().subquery()
+            source = select(*[func.lower(column) for column in columns]).where(
+                *conditions).distinct().subquery()
             statement = select(func.count()).select_from(source)
         else:
             statement = select(func.count(S.id)).where(*conditions)
@@ -67,14 +79,14 @@ class ListeningRepository(BaseRepository):
         return tuple(int(value) for value in result.scalars().all())
 
     async def _ranking(self, conditions, columns, *, album=False, limit=10):
-        selections = [column.label(label) for column, label in columns]
+        keys = [func.lower(column) for column, _ in columns]
+        selections = [_spelling(column).label(label) for column, label in columns]
         if album:
             # A representative album is metadata, not part of track identity.
-            selections.append(func.min(S.album_name).label('album'))
+            selections.append(_spelling(S.album_name).label('album'))
         count = func.count(S.id).label('count')
         statement = select(*selections, count).where(*conditions).group_by(
-            *[column for column, _ in columns]
-        ).order_by(count.desc(), *[column for column, _ in columns]).limit(limit)
+            *keys).order_by(count.desc(), *keys).limit(limit)
         return await self._rows(statement)
 
     @staticmethod
@@ -93,8 +105,11 @@ class ListeningRepository(BaseRepository):
             self._ranking(conditions, columns, album=album),
             self._ranking(previous, columns, limit=50) if previous is not None else asyncio.sleep(0, []),
         )
-        earlier = {tuple(row[label] for label in labels): rank for rank, row in enumerate(previous_rows, 1)}
-        return [{**row, 'previous_rank': earlier.get(tuple(row[label] for label in labels))} for row in rows]
+        # Each year picks its own most-scrobbled spelling, so match on lowercase.
+        def key(row):
+            return tuple(row[label].lower() for label in labels)
+        earlier = {key(row): rank for rank, row in enumerate(previous_rows, 1)}
+        return [{**row, 'previous_rank': earlier.get(key(row))} for row in rows]
 
     async def wrapped(self, year: int):
         conditions = self._year_range(year)
@@ -150,11 +165,12 @@ class ListeningRepository(BaseRepository):
             return {'date': day, 'years': []}
         year = extract('year', S.scrobbled_at).label('year')
         count = func.count(S.id).label('count')
+        track, artist = func.lower(S.track_name), func.lower(S.artist_name)
         rows = await self._rows(select(
-            year, S.track_name.label('name'), S.artist_name.label('artist'),
-            func.min(S.album_name).label('album'), count,
-        ).where(or_(*ranges)).group_by(year, S.track_name, S.artist_name).order_by(
-            year.desc(), count.desc(), S.artist_name, S.track_name))
+            year, _spelling(S.track_name).label('name'), _spelling(S.artist_name).label('artist'),
+            _spelling(S.album_name).label('album'), count,
+        ).where(or_(*ranges)).group_by(year, track, artist).order_by(
+            year.desc(), count.desc(), artist, track))
         years: dict[int, dict] = {}
         for row in rows:
             entry = years.setdefault(int(row.pop('year')), {'total_scrobbles': 0, 'top_tracks': []})
@@ -171,7 +187,7 @@ class ListeningRepository(BaseRepository):
 
     async def artist(self, artist: str, *, rank: bool = True):
         """``rank=False`` skips the whole-table scan for callers that don't show it."""
-        conditions = (S.artist_name == artist,)
+        conditions = (_same(S.artist_name, artist),)
         span, years, totals, first, top_albums, top_tracks = await self._gather(
             self._listening_span(conditions),
             self._year_counts(conditions),
@@ -200,7 +216,7 @@ class ListeningRepository(BaseRepository):
 
     async def _load_artist_totals(self):
         count = func.count(S.id)
-        result = await self.execute(select(count).group_by(S.artist_name).order_by(count))
+        result = await self.execute(select(count).group_by(func.lower(S.artist_name)).order_by(count))
         return tuple(result.scalars().all())
 
 
@@ -211,15 +227,15 @@ class ListeningRepository(BaseRepository):
             func.max(S.scrobbled_at).label('last_scrobbled_at'),
         ]
         if album:
-            selections.append(func.count(func.distinct(S.track_name)).label('unique_tracks'))
+            selections.append(func.count(func.distinct(func.lower(S.track_name))).label('unique_tracks'))
         rows = await self._rows(select(*selections).where(*conditions))
         return rows[0]
 
     async def context(self, artist: str, track: str, album: str | None = None):
         # Every query is tiny, so on a remote database the round trips are the
         # cost; run them together rather than one after another.
-        track_conditions = (S.artist_name == artist, S.track_name == track)
-        album_conditions = (S.artist_name == artist, S.album_name == album)
+        track_conditions = (_same(S.artist_name, artist), _same(S.track_name, track))
+        album_conditions = (_same(S.artist_name, artist), _same(S.album_name, album))
         (track_years, recent, track_span,
          album_span, album_tracks, album_years, artist_summary) = await self._gather(
             self._year_counts(track_conditions),

@@ -92,7 +92,7 @@ class ContextQueryTests(unittest.IsolatedAsyncioTestCase):
         listening_cache.invalidate()
         self.addCleanup(listening_cache.invalidate)
 
-    async def test_queries_are_exact_scoped_bounded_and_share_session(self):
+    async def test_queries_are_case_insensitive_scoped_bounded_and_share_session(self):
         statements = []
         timestamp = datetime(2026, 9, 29, 12)
 
@@ -128,16 +128,16 @@ class ContextQueryTests(unittest.IsolatedAsyncioTestCase):
         for statement in statements:
             compiled = statement.compile(dialect=postgresql.dialect())
             sql = str(compiled)
-            self.assertIn('scrobbles.artist_name =', sql)
+            self.assertIn('lower(scrobbles.artist_name) = lower(', sql)
             self.assertIn("Artist' OR 1=1", compiled.params.values())
             self.assertNotIn("Artist'", sql)
         for statement in statements[:3]:
             compiled = statement.compile(dialect=postgresql.dialect())
-            self.assertIn('scrobbles.track_name =', str(compiled))
+            self.assertIn('lower(scrobbles.track_name) = lower(', str(compiled))
             self.assertIn('Song', compiled.params.values())
         for statement in statements[3:6]:
             compiled = statement.compile(dialect=postgresql.dialect())
-            self.assertIn('scrobbles.album_name =', str(compiled))
+            self.assertIn('lower(scrobbles.album_name) = lower(', str(compiled))
             self.assertIn('Album', compiled.params.values())
         for index in (1, 4):
             compiled = statements[index].compile(dialect=postgresql.dialect())
