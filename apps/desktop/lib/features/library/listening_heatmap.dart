@@ -60,12 +60,9 @@ class ListeningHeatmap extends StatelessWidget {
   /// Days after this are left blank; defaults to the current date.
   final DateTime? today;
 
-  // Sequential ramp on the dark surface: dim plum to the lilac accent.
-  static const ramp = [
-    Color(0xFF4A3D73),
-    Color(0xFF6E58A8),
-    Color(0xFF9A80D8),
-    Color(0xFFC4A7FF),
+  /// Sequential ramp on the dark surface, from a dim accent up to the accent.
+  static List<Color> rampFor(Color empty, Color accent) => [
+    for (final t in const [.3, .5, .75, 1.0]) Color.lerp(empty, accent, t)!,
   ];
   static const _gap = 2.0;
   static const _dayLabelWidth = 28.0;
@@ -93,6 +90,7 @@ class ListeningHeatmap extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = ScrobblerColors.of(context);
+    final ramp = rampFor(colors.surfaceHighest, theme.colorScheme.primary);
     final now = today ?? DateTime.now();
     final last = DateTime(now.year, now.month, now.day);
     final first = DateTime(daily.year);
@@ -180,6 +178,7 @@ class ListeningHeatmap extends StatelessWidget {
                             ),
                             last,
                             limits,
+                            ramp,
                             colors,
                             cell,
                           ),
@@ -219,6 +218,7 @@ class ListeningHeatmap extends StatelessWidget {
     DateTime day,
     DateTime last,
     List<int> limits,
+    List<Color> ramp,
     ScrobblerColors colors,
     double size,
   ) {

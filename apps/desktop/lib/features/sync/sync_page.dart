@@ -11,7 +11,7 @@ enum SyncRange {
   month('Last 30 days'),
   year('This year'),
   all('All history'),
-  custom('Custom…');
+  custom('Custom');
 
   const SyncRange(this.label);
   final String label;
@@ -77,27 +77,33 @@ class _SyncPageState extends State<SyncPage> {
     (final from?, final to?) => '${formatDate(from)} – ${formatDate(to)}',
   };
 
-  Future<void> _pick(SyncRange range) async {
-    if (range != SyncRange.custom) {
-      setState(() => _range = range);
-      return;
+  void _pick(SyncRange range) => setState(() {
+    _range = range;
+    if (range == SyncRange.custom) {
+      _custom ??= DateTimeRange(
+        start: _today.subtract(const Duration(days: 6)),
+        end: _today,
+      );
     }
-    final picked = await showDateRangePicker(
+  });
+
+  // One date at a time: the single-date picker can jump to a year, where the
+  // range picker only scrolls month by month.
+  Future<void> _pickDay({required bool start}) async {
+    final range = _custom!;
+    final picked = await showDatePicker(
       context: context,
-      firstDate: DateTime(2002),
-      lastDate: _today,
-      initialDateRange:
-          _custom ??
-          DateTimeRange(
-            start: _today.subtract(const Duration(days: 6)),
-            end: _today,
-          ),
+      initialDate: start ? range.start : range.end,
+      firstDate: start ? DateTime(2002) : range.start,
+      lastDate: start ? range.end : _today,
+      helpText: start ? 'Sync from' : 'Sync through',
     );
     if (picked == null || !mounted) return;
-    setState(() {
-      _custom = picked;
-      _range = SyncRange.custom;
-    });
+    setState(
+      () => _custom = start
+          ? DateTimeRange(start: picked, end: range.end)
+          : DateTimeRange(start: range.start, end: picked),
+    );
   }
 
   Future<void> _sync() async {
@@ -152,6 +158,25 @@ class _SyncPageState extends State<SyncPage> {
               ),
           ],
         ),
+        if (_range == SyncRange.custom) ...[
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: running ? null : () => _pickDay(start: true),
+                icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                label: Text('From ${formatDate(_custom!.start)}'),
+              ),
+              OutlinedButton.icon(
+                onPressed: running ? null : () => _pickDay(start: false),
+                icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                label: Text('To ${formatDate(_custom!.end)}'),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 16),
         Text(_describe(from, to)),
         if (_range == SyncRange.all)

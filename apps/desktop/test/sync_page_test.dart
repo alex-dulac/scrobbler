@@ -88,6 +88,33 @@ void main() {
     });
   });
 
+  testWidgets('custom range picks each end separately', (tester) async {
+    final backend = Backend();
+    await openPage(tester, backend);
+    await tester.tap(find.text('Custom'));
+    await tester.pump();
+    expect(find.text('From Nov 5, 2026'), findsOneWidget);
+
+    await tester.tap(find.text('From Nov 5, 2026'));
+    await tester.pumpAndSettle();
+    // The year can be chosen directly
+    await tester.tap(find.text('November 2026'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2025'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3'));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nov 3, 2025 – Nov 11, 2026'), findsOneWidget);
+    await tester.tap(find.text('Sync now'));
+    await tester.pumpAndSettle();
+    expect(jsonDecode(backend.commands.single.body), {
+      'time_from': '2025-11-03',
+      'time_to': '2026-11-11',
+    });
+  });
+
   testWidgets('shows progress, then announces the result', (tester) async {
     final backend = Backend()
       ..state = stateWith(

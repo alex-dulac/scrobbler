@@ -78,8 +78,8 @@ class _AlbumArtState extends State<AlbumArt> {
 }
 
 /// Builds with an accent colour taken from the album cover, or the theme's
-/// primary colour when there is no usable cover.
-class ArtworkTint extends StatefulWidget {
+/// primary colour when the cover has none, fading between the two.
+class ArtworkTint extends StatelessWidget {
   const ArtworkTint({
     super.key,
     required this.api,
@@ -92,11 +92,72 @@ class ArtworkTint extends StatefulWidget {
   final String artist, album;
   final String? url;
   final Widget Function(BuildContext context, Color tint) builder;
+
   @override
-  State<ArtworkTint> createState() => _ArtworkTintState();
+  Widget build(BuildContext context) => _CoverColor(
+    api: api,
+    artist: artist,
+    album: album,
+    url: url,
+    builder: (context, tint) => TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: tint ?? Theme.of(context).colorScheme.primary),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOut,
+      builder: (context, tint, _) => builder(context, tint!),
+    ),
+  );
 }
 
-class _ArtworkTintState extends State<ArtworkTint> {
+/// Rebuilds the app theme around the cover colour so every accent in the
+/// interface follows the album that is playing.
+class ArtworkTheme extends StatelessWidget {
+  const ArtworkTheme({
+    super.key,
+    required this.api,
+    required this.artist,
+    required this.album,
+    this.url,
+    required this.child,
+  });
+  final ScrobblerApi api;
+  final String artist, album;
+  final String? url;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => _CoverColor(
+    api: api,
+    artist: artist,
+    album: album,
+    url: url,
+    builder: (context, tint) => AnimatedTheme(
+      data: AppTheme.withAccent(tint),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOut,
+      child: child,
+    ),
+  );
+}
+
+/// Resolves the cover colour once per album; null while loading or when the
+/// cover has no usable colour.
+class _CoverColor extends StatefulWidget {
+  const _CoverColor({
+    required this.api,
+    required this.artist,
+    required this.album,
+    this.url,
+    required this.builder,
+  });
+  final ScrobblerApi api;
+  final String artist, album;
+  final String? url;
+  final Widget Function(BuildContext context, Color? tint) builder;
+  @override
+  State<_CoverColor> createState() => _CoverColorState();
+}
+
+class _CoverColorState extends State<_CoverColor> {
   Color? _tint;
   int _generation = 0;
   @override
@@ -106,7 +167,7 @@ class _ArtworkTintState extends State<ArtworkTint> {
   }
 
   @override
-  void didUpdateWidget(ArtworkTint oldWidget) {
+  void didUpdateWidget(_CoverColor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.artist != oldWidget.artist ||
         widget.album != oldWidget.album ||
@@ -130,58 +191,69 @@ class _ArtworkTintState extends State<ArtworkTint> {
   }
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<Color?>(
-    tween: ColorTween(end: _tint ?? Theme.of(context).colorScheme.primary),
-    duration: const Duration(milliseconds: 600),
-    curve: Curves.easeOut,
-    builder: (context, tint, _) => widget.builder(context, tint!),
-  );
+  Widget build(BuildContext context) => widget.builder(context, _tint);
 }
 
 class RecordSleeve extends StatelessWidget {
   const RecordSleeve({super.key});
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _RecordPainter());
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = ScrobblerColors.of(context);
+    return CustomPaint(
+      painter: _RecordPainter(
+        accent: theme.colorScheme.primary,
+        vinyl: theme.scaffoldBackgroundColor,
+        grooves: colors.outline,
+      ),
+    );
+  }
 }
 
 class _RecordPainter extends CustomPainter {
+  _RecordPainter({
+    required this.accent,
+    required this.vinyl,
+    required this.grooves,
+  });
+  final Color accent, vinyl, grooves;
+
   @override
   void paint(Canvas canvas, Size size) {
     final bounds = Offset.zero & size;
     canvas.drawRect(
       bounds,
       Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0xFFC4A7FF), Color(0xFF7D63C3), Color(0xFF39304F)],
+        ..shader = LinearGradient(
+          colors: [
+            accent,
+            Color.lerp(accent, vinyl, .5)!,
+            Color.lerp(accent, vinyl, .85)!,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ).createShader(bounds),
     );
     final center = Offset(size.width * .56, size.height * .54);
     final radius = math.min(size.width, size.height) * .39;
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF191925));
+    canvas.drawCircle(center, radius, Paint()..color = vinyl);
     for (var i = 4; i < 15; i++) {
       canvas.drawCircle(
         center,
         radius * i / 15,
         Paint()
-          ..color = const Color(0xFF39394B)
+          ..color = grooves
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
     }
-    canvas.drawCircle(
-      center,
-      radius * .29,
-      Paint()..color = const Color(0xFFD4ED83),
-    );
-    canvas.drawCircle(
-      center,
-      radius * .06,
-      Paint()..color = const Color(0xFF171722),
-    );
+    canvas.drawCircle(center, radius * .29, Paint()..color = accent);
+    canvas.drawCircle(center, radius * .06, Paint()..color = vinyl);
   }
 
   @override
-  bool shouldRepaint(covariant _RecordPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RecordPainter oldDelegate) =>
+      accent != oldDelegate.accent ||
+      vinyl != oldDelegate.vinyl ||
+      grooves != oldDelegate.grooves;
 }

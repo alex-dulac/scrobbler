@@ -29,12 +29,10 @@ class ListeningPage extends StatelessWidget {
         : (track.scrobbleThreshold ?? 0) > 0
         ? (track.elapsed / track.scrobbleThreshold!).clamp(0.0, 1.0)
         : 0.0;
-    final hero = ArtworkTint(
-      api: controller.api,
-      artist: track?.artist ?? '',
-      album: track?.album ?? '',
-      url: state?.artworkUrl,
-      builder: (context, tint) {
+    // The app theme is built from the cover, so its primary is the cover tint.
+    final tint = theme.colorScheme.primary;
+    final hero = Builder(
+      builder: (context) {
         final surface = ScrobblerColors.of(context).surfaceRaised;
         return Container(
           padding: const EdgeInsets.all(24),

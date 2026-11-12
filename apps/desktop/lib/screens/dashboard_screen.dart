@@ -413,65 +413,60 @@ class _PlayerBar extends StatelessWidget {
     final theme = Theme.of(context);
     final state = controller.state;
     final track = state?.currentTrack;
-    return ArtworkTint(
-      api: controller.api,
-      artist: track?.artist ?? '',
-      album: track?.album ?? '',
-      url: state?.artworkUrl,
-      builder: (context, tint) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color.alphaBlend(
-                tint.withValues(alpha: .12),
-                theme.colorScheme.surface,
-              ),
+    final tint = theme.colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color.alphaBlend(
+              tint.withValues(alpha: .12),
               theme.colorScheme.surface,
-            ],
-            stops: const [0, .5],
-          ),
-          border: Border(top: BorderSide(color: tint.withValues(alpha: .45))),
-        ),
-        child: Row(
-          children: [
-            AlbumArt(
-              api: controller.api,
-              artist: track?.artist ?? '',
-              album: track?.album ?? '',
-              url: state?.artworkUrl,
-              size: 44,
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track?.name ?? 'No track selected',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  Text(
-                    track?.artist ?? 'Apple Music + Spotify',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            PlaybackControls(controller: controller),
-            if (MediaQuery.sizeOf(context).width > 700) ...[
-              const SizedBox(width: 28),
-              Text(
-                '${formatCount(state?.pending.length ?? 0)} queued',
-                style: AppFonts.numeric(theme.textTheme.labelLarge),
-              ),
-            ],
+            theme.colorScheme.surface,
           ],
+          stops: const [0, .5],
         ),
+        border: Border(top: BorderSide(color: tint.withValues(alpha: .45))),
+      ),
+      child: Row(
+        children: [
+          AlbumArt(
+            api: controller.api,
+            artist: track?.artist ?? '',
+            album: track?.album ?? '',
+            url: state?.artworkUrl,
+            size: 44,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  track?.name ?? 'No track selected',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium,
+                ),
+                Text(
+                  track?.artist ?? 'Apple Music + Spotify',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          PlaybackControls(controller: controller),
+          if (MediaQuery.sizeOf(context).width > 700) ...[
+            const SizedBox(width: 28),
+            Text(
+              '${formatCount(state?.pending.length ?? 0)} queued',
+              style: AppFonts.numeric(theme.textTheme.labelLarge),
+            ),
+          ],
+        ],
       ),
     );
   }

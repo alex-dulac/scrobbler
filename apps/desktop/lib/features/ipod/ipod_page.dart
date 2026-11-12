@@ -181,7 +181,7 @@ class _IpodPageState extends State<IpodPage> {
                   Icons.circle,
                   size: 8,
                   color: connected
-                      ? theme.colorScheme.secondary
+                      ? ScrobblerColors.of(context).success
                       : theme.colorScheme.outline,
                 ),
                 const SizedBox(width: 8),
@@ -238,7 +238,7 @@ class _IpodPageState extends State<IpodPage> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               _notice!,
-              style: TextStyle(color: theme.colorScheme.secondary),
+              style: TextStyle(color: ScrobblerColors.of(context).success),
             ),
           ),
         if (_plays != null && plays.isEmpty)

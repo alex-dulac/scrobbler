@@ -216,7 +216,7 @@ class _ManualAlbumPageState extends State<ManualAlbumPage> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               _notice!,
-              style: TextStyle(color: theme.colorScheme.secondary),
+              style: TextStyle(color: ScrobblerColors.of(context).success),
             ),
           ),
         if (preview != null) ...[

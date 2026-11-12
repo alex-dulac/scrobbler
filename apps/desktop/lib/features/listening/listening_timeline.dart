@@ -34,11 +34,13 @@ class ListeningTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final now = currentYear ?? DateTime.now().year;
+    // One hue for every row: the labels name the series, and the cover
+    // colour ties the chart to what is playing.
+    final accent = theme.colorScheme.primary;
     final series = [
-      ('Track', annualCounts(track), theme.colorScheme.primary),
-      if (album != null)
-        ('Album', annualCounts(album!), theme.colorScheme.secondary),
-      ('Artist', annualCounts(artist), theme.colorScheme.tertiary),
+      ('Track', annualCounts(track), accent),
+      if (album != null) ('Album', annualCounts(album!), accent),
+      ('Artist', annualCounts(artist), accent),
     ];
     final recordedYears = series.expand((row) => row.$2.keys).toList();
     if (recordedYears.isEmpty) return const SizedBox.shrink();

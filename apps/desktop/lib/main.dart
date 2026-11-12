@@ -8,6 +8,7 @@ import 'screens/dashboard_screen.dart';
 import 'services/backend_process.dart';
 import 'services/scrobbler_api.dart';
 import 'theme/app_theme.dart';
+import 'widgets/album_art.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -133,6 +134,28 @@ class _ScrobblerAppState extends State<ScrobblerApp> {
       title: 'Scrobbler',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
+      // Above the navigator so pushed pages follow the cover colour too.
+      builder: (context, child) {
+        final controller = _controller;
+        if (controller == null || _quitting || _startupError != null) {
+          return child!;
+        }
+        return ListenableBuilder(
+          listenable: controller,
+          child: child,
+          builder: (context, child) {
+            final state = controller.state;
+            final track = state?.currentTrack;
+            return ArtworkTheme(
+              api: controller.api,
+              artist: track?.artist ?? '',
+              album: track?.album ?? '',
+              url: state?.artworkUrl,
+              child: child!,
+            );
+          },
+        );
+      },
       home: _quitting
           ? const _ConnectionScreen(message: 'Stopping your scrobbler…')
           : _startupError != null
